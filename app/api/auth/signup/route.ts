@@ -1,4 +1,5 @@
 import {db} from '@/db/raw';
+import {authFailure} from '@/lib/auth-errors';
 import {isSignupDepartment} from '@/lib/departments';
 import {defaultProfile} from '@/lib/workforce-store';
 import {ADMIN_PHONE,ensureSchema,findUserByPhone,hashPassword,normalizePhone,passwordProblem,sameOrigin} from '@/lib/auth';
@@ -24,4 +25,4 @@ export async function POST(req:Request){try{
       .bind(id,JSON.stringify({...defaultProfile,department,other:''})),
   ]);
   return Response.json({ok:true,message:'Registration received. You can log in once the Admin approves your account.'});
-}catch(e:any){if(String(e?.message).includes('UNIQUE'))return Response.json({error:'This mobile number is already registered.'},{status:409});console.error(e);return Response.json({error:'Unable to register. Please retry.'},{status:503});}}
+}catch(e:any){if(String(e?.message).includes('UNIQUE'))return Response.json({error:'This mobile number is already registered.'},{status:409});return authFailure(e,'Unable to register. Please retry.');}}

@@ -11,7 +11,7 @@ const copy:Record<Mode,{title:string,caption:string,button:string}>={
   admin:{title:'Admin setup.',caption:'First-time setup for the designated Admin number. Create the Admin password.',button:'Create Admin password'},
 };
 export default function Login(){const[mode,setMode]=useState<Mode>('login');const[adminSetup,setAdminSetup]=useState(false);const[phone,setPhone]=useState('');const[name,setName]=useState('');const[role,setRole]=useState('');const[team,setTeam]=useState('');const[password,setPassword]=useState('');const[confirm,setConfirm]=useState('');const[message,setMessage]=useState('');const[done,setDone]=useState('');const[busy,setBusy]=useState(false);
-useEffect(()=>{fetch('/api/auth/me').then(r=>r.json()).then((d:any)=>{if(d.user)location.replace('/dashboard');else setAdminSetup(!!d.adminSetupNeeded);}).catch(()=>{});},[]);
+useEffect(()=>{fetch('/api/auth/me').then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error||'Unable to check account setup. Please reload.');return d;}).then((d:any)=>{if(d.user)location.replace('/dashboard');else setAdminSetup(!!d.adminSetupNeeded);}).catch((e:Error)=>setMessage(e.message));},[]);
 function switchMode(m:Mode){setMode(m);setMessage('');setDone('');setPassword('');setConfirm('');}
 async function submit(e:React.FormEvent){e.preventDefault();setMessage('');
   if(!/^[6-9]\d{9}$/.test(phone)){setMessage('Enter a valid 10-digit Indian mobile number.');return;}
@@ -21,7 +21,7 @@ async function submit(e:React.FormEvent){e.preventDefault();setMessage('');
     const url=mode==='login'?'/api/auth/login':mode==='signup'?'/api/auth/signup':'/api/auth/admin-setup';
     const body=mode==='signup'?{name,phone,role,department:team,password}:{phone,password};
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d:any=await r.json();
-    if(!r.ok)throw Error(d.error||'Something went wrong. Please retry.');
+    if(!r.ok){if(d.code==='ADMIN_SETUP_REQUIRED')setAdminSetup(true);throw Error(d.error||'Something went wrong. Please retry.');}
     if(mode==='signup'){setDone(d.message);setName('');setRole('');setTeam('');setPhone('');setPassword('');setConfirm('');}
     else location.replace('/dashboard');
   }catch(err:any){setMessage(err.message);}finally{setBusy(false);}}
