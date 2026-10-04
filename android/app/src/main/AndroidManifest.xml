@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- No background-location permission, boot tracking, or automatic GPS restart. -->
-    <application android:label="PTRAAM Enterprises (test)" android:icon="@drawable/ic_ptraam" android:theme="@android:style/Theme.Material.Light.NoActionBar"
+    <application android:label="Fieldora (test)" android:icon="@drawable/ic_ptraam" android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:allowBackup="false" android:fullBackupContent="false" android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

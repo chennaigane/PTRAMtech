@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PTRAAM Enterprises | Field Operations",
-  description: "Branch attendance, GPS journeys and travel reimbursements for PTRAAM Enterprises.",
+  title: "Fieldora | Field Operations",
+  applicationName: "Fieldora",
+  description: "Fieldora — attendance, leave, GPS journeys and travel reimbursements for PTRAAM Enterprises.",
   other: {
     "codex-preview": "development",
   },

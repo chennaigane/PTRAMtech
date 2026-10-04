@@ -82,7 +82,7 @@ public final class TripService extends Service implements LocationListener {
             PendingIntent stopAction = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             PendingIntent open = PendingIntent.getActivity(this, 2, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Notification n = new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle("PTRAAM trip tracking active").setContentText("Collecting GPS for your trip. Tap Stop trip to end.")
+                .setContentTitle("Fieldora trip tracking active").setContentText("Collecting GPS for your trip. Tap Stop trip to end.")
                 .setContentIntent(open).setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).addAction(new Notification.Action.Builder(null, "Stop trip", stopAction).build()).build();
             if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION); else startForeground(1, n);
