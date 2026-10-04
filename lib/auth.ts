@@ -1,5 +1,6 @@
 import {db} from '@/db/raw';
 import {accessSetup} from '@/app/config/access';
+import {deploymentOrigins} from '@/app/config/origins';
 
 export type Role = 'Admin' | 'Manager' | 'Employee';
 export type Status = 'pending' | 'active' | 'rejected' | 'removed';
@@ -144,6 +145,17 @@ export async function checkLogin(phone: string, password: string): Promise<{user
 }
 
 function applicationOrigin(req: Request): string {
+  // Managed previews reach Next through an internal HTTP address. Accept only
+  // explicitly approved public origins, never arbitrary forwarded host headers.
+  const additional = process.env.APP_ADDITIONAL_ORIGINS;
+  const approved = (additional === undefined ? [...deploymentOrigins] : additional.split(',').map(s => s.trim()).filter(Boolean)).map(value => {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname.includes('*') || url.username || url.password || url.pathname !== '/' || url.search || url.hash)
+      throw new Error('APP_ADDITIONAL_ORIGINS must contain exact HTTPS origins without paths, credentials, queries or fragments.');
+    return url.origin;
+  });
+  const browserOrigin = req.headers.get('origin');
+  if (browserOrigin && approved.includes(browserOrigin)) return browserOrigin;
   // Behind Nginx, req.url can contain the internal listening address. Use the
   // configured public origin, never client-supplied forwarded headers.
   const configured = process.env.APP_ORIGIN?.trim();
