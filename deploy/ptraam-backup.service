@@ -1,0 +1,19 @@
+[Unit]
+Description=PTRAAM encrypted off-host SQLite backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ptraam
+Group=ptraam
+WorkingDirectory=/srv/ptraam/app
+EnvironmentFile=/srv/ptraam/app/.env.production
+EnvironmentFile=/etc/ptraam/backup.env
+ExecStart=/usr/bin/bash /srv/ptraam/app/deploy/backup.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/ptraam/data

@@ -1,0 +1,27 @@
+[Unit]
+Description=PTRAAM Node.js application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ptraam
+Group=ptraam
+WorkingDirectory=/srv/ptraam/app
+EnvironmentFile=/srv/ptraam/app/.env.production
+Environment=NODE_ENV=production
+ExecStartPre=/usr/bin/node /srv/ptraam/app/scripts/check-source.mjs
+ExecStart=/usr/bin/node /srv/ptraam/app/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/ptraam/data /srv/ptraam/app/.next/cache
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

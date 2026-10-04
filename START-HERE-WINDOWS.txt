@@ -1,0 +1,24 @@
+PTRAAM - Windows local development
+
+The missing application source has been restored from the adjacent PTRAAM folder.
+Node.js >=22.13 is required. From this project directory run:
+
+npm run dev
+
+Open http://127.0.0.1:3000. Stop an older dev process with Ctrl+C first.
+Development creates local-data/ptraam.sqlite automatically and retains it across
+restarts. DATABASE_PATH can override this with an absolute path. Production still
+requires an explicit DATABASE_PATH. Do not use production data for development.
+No password or user account is seeded. Use the application's Admin setup flow.
+
+Checks:
+  npm test
+  npm run typecheck
+  npm run build
+
+predev checks source completeness before starting Next.js. Keep app/, components/,
+hooks/, lib/, public/, tests/, drizzle/ and the project configs in source bundles.
+Restored routes run on Node SQLite; Cloudflare is not needed for local startup.
+
+The local startup fix does not complete VPS deployment, live Sheets/relay setup,
+or Android release acceptance. See deploy/README.md for those operational gates.

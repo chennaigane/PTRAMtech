@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily PTRAAM database backup at 02:00 India time
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Kolkata
+Persistent=true
+Unit=ptraam-backup.service
+
+[Install]
+WantedBy=timers.target

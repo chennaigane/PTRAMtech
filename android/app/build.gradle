@@ -1,0 +1,22 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.ptraam.tracker'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.ptraam.tracker'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '0.2.0-debug-pilot'
+        // Public URL only; an unconfigured debug build asks the tester before login.
+        def endpoint = providers.gradleProperty('ptraamApiUrl').getOrElse('')
+        if (endpoint && !(endpoint ==~ /https:\/\/[A-Za-z0-9.-]+(:[0-9]+)?/)) {
+            throw new GradleException('ptraamApiUrl must be an HTTPS origin without a path')
+        }
+        buildConfigField 'String', 'API_ORIGIN', '"' + endpoint + '"'
+    }
+    buildFeatures { buildConfig true }
+    buildTypes { debug { applicationIdSuffix '.debug'; versionNameSuffix '-debug' } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}

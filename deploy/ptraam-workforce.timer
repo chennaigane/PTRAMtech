@@ -1,0 +1,10 @@
+[Unit]
+Description=Run PTRAAM attendance reconciliation daily at 23:15 India time
+
+[Timer]
+OnCalendar=*-*-* 23:15:00 Asia/Kolkata
+Persistent=true
+Unit=ptraam-workforce.service
+
+[Install]
+WantedBy=timers.target
