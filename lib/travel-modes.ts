@@ -47,6 +47,7 @@ export function visibleTabs(me: Who, department: string | null | undefined) {
   const company = me.role === 'Admin' || me.role === 'Manager';
   const mode = travelMode(department);
   const all = ['Overview', 'Travel log', 'Attendance', 'Attendance & leave', 'Employees', 'Access & roles', 'Branches', 'Reimbursements', 'Safety centre'];
+  if (!company && mode === 'office') return ['Attendance & leave'];
   return all.filter(tab => {
     if (['Overview', 'Employees', 'Access & roles', 'Branches'].includes(tab)) return company;
     if (tab === 'Travel log' || tab === 'Reimbursements') return company || mode !== 'office';

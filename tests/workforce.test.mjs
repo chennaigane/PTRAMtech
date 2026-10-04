@@ -7,7 +7,9 @@ import {can,canView,canReview} from '../lib/permissions.ts';
 import {sheetUpdate,attendanceRows,travelRows} from '../lib/sheets-payload.ts';
 import {tripUi,visibleTabs} from '../lib/travel-modes.ts';
 import {GET as meGet} from '../app/api/auth/me/route.ts';
-import {ensureSchema} from '../lib/auth.ts';
+import {ensureSchema,createSession} from '../lib/auth.ts';
+import {POST as signup} from '../app/api/auth/signup/route.ts';
+import {signupDepartments} from '../lib/departments.ts';
 import {POST,GET} from '../app/api/workforce/route.ts';
 import {POST as recordPost,GET as recordGet} from '../app/api/records/route.ts';
 import {env,sqlite} from './cloudflare.mjs';
@@ -38,6 +40,35 @@ beforeEach(async()=>{
  sql('INSERT INTO settings VALUES(?,?)','workforce_policy',JSON.stringify(policy));
 });
 test('IST day boundary and invalid calendar dates',()=>{assert.equal(istDate(Date.parse('2026-10-04T18:30:00Z')),'2026-10-05');assert.throws(()=>datesBetween('2026-02-30','2026-03-01'));});
+
+for(const department of signupDepartments) test(`signup configures ${department} access immediately and requires approval`,async()=>{
+ const url='https://ptraam.test/api/auth/signup';
+ const response=await signup(new Request(url,{method:'POST',headers:{origin:'https://ptraam.test','Content-Type':'application/json'},body:JSON.stringify({name:'New colleague',phone:'9876543210',role:'Employee',department,password:'Password123',payrollAccess:true})}));
+ assert.equal(response.status,200,JSON.stringify(await response.json()));
+ const user=sqlite.prepare('SELECT * FROM users WHERE phone=?').get('+919876543210');
+ assert.equal(user.status,'pending');assert.equal(user.team,department);
+ const profile=JSON.parse(sqlite.prepare('SELECT data FROM workforce_profiles WHERE employee=?').get(user.id).data);
+ assert.equal(profile.department,department);assert.equal(profile.payrollAccess,false);assert.equal(profile.salary,null);
+ const cookie=await createSession(new Request(url),user.id);
+ const headers={cookie,origin:'https://ptraam.test','Content-Type':'application/json'};
+ assert.equal((await (await meGet(new Request('https://ptraam.test/api/auth/me',{headers}))).json()).user,null);
+ sql("UPDATE users SET status='active' WHERE id=?",user.id);
+ const me=(await (await meGet(new Request('https://ptraam.test/api/auth/me',{headers}))).json()).user;
+ assert.equal(me.department,department);
+ const travelling=['Marketing','Sales','Driver'].includes(department);
+ if(travelling)assert.ok(visibleTabs(me,department).includes('Travel log'));
+ else assert.deepEqual(visibleTabs(me,department),['Attendance & leave']);
+ const trip=await recordPost(new Request('https://ptraam.test/api/records',{method:'POST',headers,body:JSON.stringify({kind:'trip',data:{employee:user.id,from:'',to:'',start:now,end:null,points:[fix()],rate:3,extra:0,km:0,amount:0,status:'Travelling',note:''}})}));
+ assert.equal(trip.status,travelling?200:403,JSON.stringify(await trip.json()));
+});
+
+test('signup rejects unsupported departments and privileged roles',async()=>{
+ for(const extra of [{department:'Unknown'},{department:'Finance',role:'Admin'}]){
+  const response=await signup(new Request('https://ptraam.test/api/auth/signup',{method:'POST',headers:{origin:'https://ptraam.test','Content-Type':'application/json'},body:JSON.stringify({name:'New colleague',phone:'9876543210',role:'Employee',password:'Password123',...extra})}));
+  assert.equal(response.status,400);
+ }
+ assert.equal(sqlite.prepare('SELECT count(*) AS n FROM users WHERE phone=?').get('+919876543210').n,0);
+});
 test('geofence checks uncertainty circle, stale and invalid fixes',()=>{assert.equal(verifyFix(fix(),policy.office,now),0);for(const p of [{...fix(),accuracy:151},{...fix(),lat:14},{...fix(),time:now-121000},{...fix(),accuracy:-1}])assert.throws(()=>verifyFix(p,policy.office,now));});
 test('confirmed holidays excluded and explicit working overrides included',()=>{assert.throws(()=>workingDay('2027-01-01',policy));assert.equal(workingDay('2026-10-10',policy),false);assert.equal(workingDay('2026-10-05',{...policy,holidays:[{date:'2026-10-05',name:'Company holiday',working:false}]}),false);assert.equal(workingDay('2026-10-10',{...policy,holidays:[{date:'2026-10-10',name:'Working Saturday',working:true}]}),true);});
 test('LOP and overtime expose formulas without invented inputs',()=>{assert.equal(payroll(null,null,3,2,null,null).lop,null);assert.equal(payroll(30000,25,2,3,100,1.5).lop,2400);assert.equal(payroll(30000,25,2,3,100,1.5).overtime,450);assert.equal(payroll(30000,25,2,3,null,1).overtime,null);});

@@ -25,7 +25,7 @@ export function ensureSchema() {
     db().prepare(`CREATE INDEX IF NOT EXISTS workforce_employee_date ON workforce_entries(employee,date,kind)`),
     db().prepare(`CREATE TABLE IF NOT EXISTS workforce_audit (id TEXT PRIMARY KEY NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,target TEXT NOT NULL,details TEXT NOT NULL,created INTEGER NOT NULL)`),
     db().prepare(`CREATE TABLE IF NOT EXISTS workforce_locks (name TEXT PRIMARY KEY NOT NULL,token TEXT NOT NULL,expires INTEGER NOT NULL)`),
-    db().prepare(`INSERT OR IGNORE INTO workforce_profiles(employee,data) SELECT id,json_object('department',CASE WHEN team IN ('Marketing','Sales') THEN team ELSE 'Other' END,'other',CASE WHEN team IN ('Marketing','Sales') THEN '' ELSE 'Unassigned' END,'salary',NULL,'divisor',NULL,'otRate',NULL,'otMultiplier',NULL,'payrollAccess',json('false')) FROM users`),
+    db().prepare(`INSERT OR IGNORE INTO workforce_profiles(employee,data) SELECT id,json_object('department',CASE WHEN team IN ('Marketing','Sales','Driver','Office Admin','Finance','HR') THEN team ELSE 'Other' END,'other',CASE WHEN team IN ('Marketing','Sales','Driver','Office Admin','Finance','HR') THEN '' ELSE 'Unassigned' END,'salary',NULL,'divisor',NULL,'otRate',NULL,'otMultiplier',NULL,'payrollAccess',json('false')) FROM users`),
     db().prepare(`UPDATE users SET role='Employee' WHERE role='Representative'`),
   ]).catch(e => { schemaReady = null; throw e; });
   return schemaReady;

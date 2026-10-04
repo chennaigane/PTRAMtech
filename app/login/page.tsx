@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {ArrowRight,ShieldCheck,MapPin,Route,LockKeyhole,Info,CheckCircle2} from 'lucide-react';
 import {Tabs,TabsList,TabsTrigger} from '@/components/ui/tabs';
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
+import {signupDepartments,departmentLabel} from '@/lib/departments';
 type Mode='login'|'signup'|'admin';
 const copy:Record<Mode,{title:string,caption:string,button:string}>={
   login:{title:'Welcome back.',caption:'Sign in with your mobile number and password.',button:'Log in'},
@@ -14,11 +15,11 @@ useEffect(()=>{fetch('/api/auth/me').then(r=>r.json()).then((d:any)=>{if(d.user)
 function switchMode(m:Mode){setMode(m);setMessage('');setDone('');setPassword('');setConfirm('');}
 async function submit(e:React.FormEvent){e.preventDefault();setMessage('');
   if(!/^[6-9]\d{9}$/.test(phone)){setMessage('Enter a valid 10-digit Indian mobile number.');return;}
-  if(mode==='signup'&&(!name.trim()||!role||!team)){setMessage('Enter your name and choose your role and team.');return;}
+  if(mode==='signup'&&(!name.trim()||!role||!team)){setMessage('Enter your name and choose your role and department.');return;}
   if(mode!=='login'&&password!==confirm){setMessage('Passwords do not match.');return;}
   setBusy(true);try{
     const url=mode==='login'?'/api/auth/login':mode==='signup'?'/api/auth/signup':'/api/auth/admin-setup';
-    const body=mode==='signup'?{name,phone,role,team,password}:{phone,password};
+    const body=mode==='signup'?{name,phone,role,department:team,password}:{phone,password};
     const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d:any=await r.json();
     if(!r.ok)throw Error(d.error||'Something went wrong. Please retry.');
     if(mode==='signup'){setDone(d.message);setName('');setRole('');setTeam('');setPhone('');setPassword('');setConfirm('');}
@@ -31,7 +32,7 @@ return <div className="auth-shell"><aside className="auth-brand"><div className=
 <form onSubmit={submit}>
 {mode==='signup'&&<><label className="field">Full name<input autoComplete="name" required maxLength={80} placeholder="Enter your full name" value={name} onChange={e=>setName(e.target.value)}/></label>
 <div className="auth-row"><label className="field">Role<Select value={role} onValueChange={setRole}><SelectTrigger aria-label="Role"><SelectValue placeholder="Select role"/></SelectTrigger><SelectContent><SelectItem value="Manager">Manager</SelectItem><SelectItem value="Employee">Employee</SelectItem></SelectContent></Select></label>
-<label className="field">Team<Select value={team} onValueChange={setTeam}><SelectTrigger aria-label="Team"><SelectValue placeholder="Select team"/></SelectTrigger><SelectContent><SelectItem value="Marketing">Marketing</SelectItem><SelectItem value="Sales">Sales</SelectItem></SelectContent></Select></label></div></>}
+<label className="field">Department<Select value={team} onValueChange={setTeam}><SelectTrigger aria-label="Department"><SelectValue placeholder="Select department"/></SelectTrigger><SelectContent>{signupDepartments.map(d=><SelectItem key={d} value={d}>{departmentLabel(d)}</SelectItem>)}</SelectContent></Select></label></div><p className="detail-note">Marketing, Sales and Driver: GPS travel tracking, attendance and leave. Other departments: attendance and leave only.</p></>}
 <label className="field" htmlFor="auth-phone">Mobile number</label><div className="auth-phone"><span>IN <b>+91</b></span><input id="auth-phone" type="tel" autoComplete="tel-national" inputMode="numeric" pattern="[6-9][0-9]{9}" title="Enter a 10-digit Indian mobile number starting with 6, 7, 8 or 9" maxLength={10} required placeholder="Enter 10-digit number" value={phone} onChange={e=>{setPhone(e.target.value.replace(/\D/g,''));setMessage('')}}/></div>
 <label className="field">{mode==='login'?'Password':'Create password'}<input type="password" required minLength={mode==='login'?1:8} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} placeholder={mode==='login'?'Enter your password':'At least 8 characters, with a letter and a number'} value={password} onChange={e=>setPassword(e.target.value)}/></label>
 {mode!=='login'&&<label className="field">Confirm password<input type="password" required maxLength={128} autoComplete="new-password" placeholder="Re-enter password" value={confirm} onChange={e=>setConfirm(e.target.value)}/></label>}
