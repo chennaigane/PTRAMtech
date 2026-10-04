@@ -1,5 +1,6 @@
 'use client';
-import React,{useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import dynamic from 'next/dynamic';
 import {LayoutDashboard,MapPin,Route,Users,Wallet,ShieldCheck,ArrowUpRight,Download,Plus,Navigation,LocateFixed,Building2,ChevronRight,Clock,CheckCircle2,AlertTriangle,Phone,Square,Menu,Trash2} from 'lucide-react';
 import {SidebarProvider,Sidebar,SidebarHeader,SidebarContent,SidebarFooter,SidebarMenu,SidebarMenuItem,SidebarMenuButton,SidebarTrigger,SidebarInset} from '@/components/ui/sidebar';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
@@ -7,7 +8,7 @@ import {Table,TableHeader,TableRow,TableHead,TableBody,TableCell} from '@/compon
 import {Select,SelectTrigger,SelectValue,SelectContent,SelectItem} from '@/components/ui/select';
 import {Toaster,toast} from 'sonner';
 import 'leaflet/dist/leaflet.css';
-import WorkforcePanel from '@/components/workforce-panel';
+const WorkforcePanel=dynamic(()=>import('@/components/workforce-panel'),{loading:()=> <p role="status">Loading attendance and leave…</p>});
 import {can,canReview,canView} from '@/lib/permissions';
 import {tripUi,visibleTabs,TRIP_MAX_ACCURACY_M} from '@/lib/travel-modes';
 type Rec={id:string,kind:string,created:number,data:any};
@@ -17,14 +18,16 @@ const sample:Rec[]=[...branches.map(b=>({id:b[0] as string,kind:'branch',created
 const gpsText=(p:{lat:number;lng:number;accuracy:number}|null|undefined)=>p?`${p.lat.toFixed(5)}, ${p.lng.toFixed(5)} (±${Math.round(p.accuracy)} m)`:'';
 // Legacy trips name the branch they started from; new trips start at the captured GPS fix.
 const originOf=(t:Rec,find:(s:string)=>string)=>t.data.from?find(t.data.from):t.data.startLocation?'GPS start point':'—';
-const money=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n||0);
-const date=(t:number)=>new Date(t).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const currencyFormatter=new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0});
+const money=(n:number)=>currencyFormatter.format(n||0);
+const dateFormatter=new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+const date=(t:number)=>Number.isNaN(new Date(t).getTime())?'Invalid Date':dateFormatter.format(new Date(t));
 function Picker({value,onChange,items,placeholder='Select'}:any){return <Select value={value||undefined} onValueChange={onChange}><SelectTrigger><SelectValue placeholder={placeholder}/></SelectTrigger><SelectContent>{items.map((x:any)=><SelectItem key={x.id} value={x.id}>{x.data?.name||x.name}</SelectItem>)}</SelectContent></Select>}
 function Field({label,...props}:any){return <label className="field">{label}<input {...props}/></label>}
 // The Leaflet map is created once per mount. Overlays are redrawn only when their content changes,
 // and the view is re-fitted without animation, so a re-render can never remove the map mid-zoom.
 function MapView({branches,trip,position}:any){const el=useRef<HTMLDivElement>(null),map=useRef<any>(null),lib=useRef<any>(null),overlay=useRef<any>(null),me=useRef<any>(null);const[ready,setReady]=useState(false);
-const shapes=JSON.stringify([branches.map((b:any)=>[b.id,b.data.lat,b.data.lng,b.data.radius,b.data.name]),trip?.id,(trip?.data?.points||[]).map((p:any)=>[p.lat,p.lng]),trip?.data?.startLocation,trip?.data?.endLocation]);
+const shapes=useMemo(()=>JSON.stringify([branches.map((b:any)=>[b.id,b.data.lat,b.data.lng,b.data.radius,b.data.name]),trip?.id,(trip?.data?.points||[]).map((p:any)=>[p.lat,p.lng]),trip?.data?.startLocation,trip?.data?.endLocation]),[branches,trip]);
 useEffect(()=>{let disposed=false;import('leaflet').then(L=>{if(disposed||!el.current)return;lib.current=L;const m=L.map(el.current,{scrollWheelZoom:false}).setView([13.045,80.223],12);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(m);overlay.current=L.layerGroup().addTo(m);map.current=m;setReady(true);});return()=>{disposed=true;const m=map.current;map.current=null;overlay.current=null;me.current=null;if(m){m.stop();m.off();m.remove();}};},[]);
 useEffect(()=>{const L=lib.current,m=map.current,g=overlay.current;if(!ready||!L||!m||!g)return;g.clearLayers();const bounds:any[]=[];branches.forEach((b:any)=>{const p=[b.data.lat,b.data.lng] as [number,number];bounds.push(p);L.circle(p,{radius:b.data.radius,color:'#274f89',fillOpacity:.12,weight:1}).addTo(g);L.marker(p,{icon:L.divIcon({className:'branch-pin',html:'<span>⌂</span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(g).bindTooltip(b.data.name);});const pts=trip?.data?.points||[];if(pts.length){const path=pts.map((p:any)=>[p.lat,p.lng]);L.polyline(path,{color:'#274f89',weight:5,opacity:.85}).addTo(g);bounds.push(...path);const last=pts[pts.length-1];if(!trip.data.endLocation)L.circleMarker([last.lat,last.lng],{radius:9,color:'#fff',weight:3,fillColor:'#274f89',fillOpacity:1}).addTo(g).bindTooltip('Last recorded trip position');}const st=trip?.data?.startLocation||(trip?.data?.from?null:pts[0]);if(st){L.circle([st.lat,st.lng],{radius:st.accuracy||0,color:'#1f8a4c',weight:1,fillOpacity:.12}).addTo(g);L.circleMarker([st.lat,st.lng],{radius:9,color:'#fff',weight:3,fillColor:'#1f8a4c',fillOpacity:1}).addTo(g).bindTooltip(`Trip start · ${date(st.time||trip.data.start)} · ±${Math.round(st.accuracy||0)} m`,{permanent:pts.length<2});bounds.push([st.lat,st.lng]);}const en=trip?.data?.endLocation;if(en){L.circleMarker([en.lat,en.lng],{radius:9,color:'#fff',weight:3,fillColor:'#b4322f',fillOpacity:1}).addTo(g).bindTooltip(`Trip end · ${date(en.time||trip.data.end)} · ±${Math.round(en.accuracy||0)} m`);bounds.push([en.lat,en.lng]);}if(position)bounds.push([position.lat,position.lng]);m.stop();if(bounds.length)m.fitBounds(bounds,{padding:[45,45],maxZoom:14,animate:false});
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -33,13 +36,19 @@ useEffect(()=>{const L=lib.current,m=map.current;if(!ready||!L||!m)return;if(!po
 return <div ref={el} className="map" aria-label="Branch and recorded travel map"/>}
 export default function App(){const[tab,setTab]=useState('Overview'),[demo,setDemo]=useState(false),[records,setRecords]=useState<Rec[]>([]),[rate,setRate]=useState(3),[loading,setLoading]=useState(false),[dialog,setDialog]=useState(''),[form,setForm]=useState<any>({}),[busy,setBusy]=useState(false),[selected,setSelected]=useState(''),[position,setPosition]=useState<any>(null),[tracking,setTracking]=useState(''),[gpsError,setGpsError]=useState(''),[query,setQuery]=useState(''),[me,setMe]=useState<any>(null),[members,setMembers]=useState<any[]>([]);const watch=useRef<number|null>(null),tripRef=useRef<Rec|null>(null),saving=useRef(false),wake=useRef<any>(null),resumed=useRef(false);
 const ui=tripUi(me?.department);
-const people=records.filter(r=>r.kind==='employee');const personOf=(id:string)=>{const p=people.find(x=>x.id===id);return {id,role:p?.data.role||'',team:p?.data.team||null};};
+const recordIndex=useMemo(()=>{const index=new Map<string,Rec>();for(const record of records)if(!index.has(record.id))index.set(record.id,record);return index;},[records]);
+const peopleIndex=useMemo(()=>{const index=new Map<string,Rec>();for(const record of records)if(record.kind==='employee'&&!index.has(record.id))index.set(record.id,record);return index;},[records]);
+const personOf=useCallback((id:string)=>{const p=peopleIndex.get(id);return {id,role:p?.data.role||'',team:p?.data.team||null};},[peopleIndex]);
 // Sample mode applies the same role scope the server applies to real data.
-const scoped=me?records.filter(r=>r.kind==='branch'||(r.kind==='employee'?canView(me,{id:r.id,role:r.data.role,team:r.data.team}):canView(me,personOf(r.data.employee)))):[];
+const scoped=useMemo(()=>me?records.filter(r=>r.kind==='branch'||(r.kind==='employee'?canView(me,{id:r.id,role:r.data.role,team:r.data.team}):canView(me,personOf(r.data.employee)))):[],[me,records,personOf]);
 const mine=(r:Rec)=>r.data.employee===me?.id;
 const canDelete=(t:Rec)=>!t.data.startVerified&&['Travelling','Pending'].includes(t.data.status)&&(mine(t)||me?.role==='Admin');
 const activeTrip=()=>records.find(r=>r.kind==='trip'&&mine(r)&&r.data.status==='Travelling');
-const bs=scoped.filter(r=>r.kind==='branch'),es=scoped.filter(r=>r.kind==='employee'&&r.data.status!=='removed'),trips=scoped.filter(r=>r.kind==='trip'),incidents=scoped.filter(r=>r.kind==='incident'),attendance=scoped.filter(r=>r.kind==='attendance');const find=(id:string)=>records.find(r=>r.id===id)?.data.name||(id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(id)?id:'—');const chosen=trips.find(t=>t.id===selected)||trips[0];const origin=(t:Rec)=>originOf(t,find);const total=trips.reduce((s,t)=>s+(t.data.km||0),0);const pending=trips.filter(t=>t.data.status==='Pending').reduce((s,t)=>s+t.data.amount,0);
+const {bs,es,trips,incidents,attendance,total,pending}=useMemo(()=>{
+const bs:Rec[]=[],es:Rec[]=[],trips:Rec[]=[],incidents:Rec[]=[],attendance:Rec[]=[];let total=0,pending=0;
+for(const record of scoped){switch(record.kind){case 'branch':bs.push(record);break;case 'employee':if(record.data.status!=='removed')es.push(record);break;case 'trip':trips.push(record);total+=record.data.km||0;if(record.data.status==='Pending')pending+=record.data.amount;break;case 'incident':incidents.push(record);break;case 'attendance':attendance.push(record);break;}}
+return {bs,es,trips,incidents,attendance,total,pending};},[scoped]);
+const find=useCallback((id:string)=>recordIndex.get(id)?.data.name||(id&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/.test(id)?id:'—'),[recordIndex]);const chosen=trips.find(t=>t.id===selected)||trips[0];const origin=(t:Rec)=>originOf(t,find);
 async function load(){setLoading(true);try{const r=await fetch('/api/records');const d:any=await r.json();if(!r.ok)throw Error(d.error);setRecords([...d.people.map((p:any)=>({id:p.id,kind:'employee',created:0,data:p})),...d.records]);setRate(d.settings.rate);}catch(e:any){toast.error(e.message);}finally{setLoading(false);}}
 useEffect(()=>{fetch('/api/auth/me').then(r=>r.json()).then((d:any)=>{if(!d.user)location.replace('/login');else{setMe(d.user);if(!can.companyDashboard(d.user))setTab('Attendance & leave');}}).catch(()=>location.replace('/login'));},[]);
 async function loadMembers(){try{const r=await fetch('/api/users');const d:any=await r.json();if(!r.ok)throw Error(d.error);setMembers(d.users);}catch(e:any){toast.error(e.message);}}

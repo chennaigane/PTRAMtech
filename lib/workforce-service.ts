@@ -4,7 +4,7 @@ import {canView,canReview} from '@/lib/permissions';
 import {atIST,datesBetween,istDate,workingDay,overtimeHours,payroll} from '@/lib/workforce-rules';
 import {audit,entries,entry,policy,profile,put,invalidatePayroll,type Entry} from '@/lib/workforce-store';
 export async function people(){return (await db().prepare('SELECT id,name,role,team,status,created FROM users').all<User>()).results;}
-export async function allowed(u:User,id:string,review=false){const p=(await people()).find(p=>p.id===id);if(!p||!(review?canReview(u,p):canView(u,p)))throw Error('Permission denied for this employee.');return p;}
+export async function allowed(u:User,id:string,review=false){const p=await db().prepare('SELECT id,name,role,team,status,created FROM users WHERE id=?').bind(id).first<User>();if(!p||!(review?canReview(u,p):canView(u,p)))throw Error('Permission denied for this employee.');return p;}
 // Payroll is available to Admins and Managers by role. Managers still see only
 // records for employees in their assigned team through the canView filter.
 export async function payrollAllowed(u:User){return u.role==='Admin'||u.role==='Manager';}
