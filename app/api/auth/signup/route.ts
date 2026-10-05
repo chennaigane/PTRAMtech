@@ -25,4 +25,4 @@ export async function POST(req:Request){try{
       .bind(id,JSON.stringify({...defaultProfile,department,other:''})),
   ]);
   return Response.json({ok:true,message:'Registration received. You can log in once the Admin approves your account.'});
-}catch(e:any){if(String(e?.message).includes('UNIQUE'))return Response.json({error:'This mobile number is already registered.'},{status:409});return authFailure(e,'Unable to register. Please retry.');}}
+}catch(e:any){if(e?.code==='ER_DUP_ENTRY'||String(e?.message).includes('UNIQUE'))return Response.json({error:'This mobile number is already registered.'},{status:409});return authFailure(e,'Unable to register. Please retry.');}}

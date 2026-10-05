@@ -1,8 +1,28 @@
 # Sign-in and first Admin setup
 
-The application requires Node.js 22.13+ and a writable, persistent SQLite file.
-An origin fix does not configure account storage. Without `DATABASE_PATH`, production
-sign-in, registration and Admin setup cannot work.
+The application requires Node.js 22.13+ and configured account storage. GoDaddy
+managed Node.js uses MySQL; existing VPS installations can continue using SQLite.
+An origin fix does not configure account storage.
+
+## GoDaddy managed Node.js (MySQL)
+
+1. Enable/attach the managed MySQL database to this app in GoDaddy. Its runtime
+   settings supply `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`.
+   Fieldora detects these automatically; `DATABASE_PATH` is not required.
+2. Update the deployed app using your existing Git sync or zip-upload workflow.
+   Ensure the database settings are available in the environment you are using
+   (preview or published). Restart/redeploy after changes.
+3. Fieldora initializes missing tables without dropping existing records. The
+   database account needs table/index creation and read/write permissions.
+4. Open `/api/auth/me`. A new database returns `adminSetupNeeded: true`. Then
+   open `/login`, click **Set up Admin password**, enter **9600043768**, and create
+   and confirm your own password. There is no preset password.
+5. If the Admin already exists, log in with the existing password. Changing
+   database settings does not reset passwords or migrate old SQLite records.
+
+Full configuration and verification: [GoDaddy MySQL](GODADDY-MYSQL.md).
+
+## Existing SQLite/VPS installations
 
 1. In the hosting service, attach a persistent disk and record its actual mount path.
    Set the runtime variable `DATABASE_PATH` to an absolute filename on that disk,

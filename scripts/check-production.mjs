@@ -14,8 +14,16 @@ export function checkProduction(env) {
     const url = new URL(requireValue('APP_ORIGIN'));
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.hostname === 'localhost' || url.hostname.endsWith('.example.com')) throw Error();
   } catch { errors.push('APP_ORIGIN must be the public HTTPS origin without a path'); }
-  const database = requireValue('DATABASE_PATH');
-  if (!posix.isAbsolute(database) || database.startsWith('/srv/ptraam/app/')) errors.push('DATABASE_PATH must be an absolute VPS path outside the application directory');
+  if(env.DATABASE_DRIVER&&!['mysql','sqlite'].includes(env.DATABASE_DRIVER))errors.push('DATABASE_DRIVER must be mysql or sqlite');
+  const mysql=env.DATABASE_DRIVER!=='sqlite'&&(env.DATABASE_DRIVER==='mysql'||['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'].some(key=>!!env[key]));
+  if(mysql){
+    for(const key of ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'])requireValue(key);
+    const port=Number(env.DB_PORT);if(!Number.isInteger(port)||port<1||port>65535)errors.push('DB_PORT must be a valid TCP port');
+    if(env.DB_SSL&&!['true','false'].includes(env.DB_SSL))errors.push('DB_SSL must be true or false');
+  }else{
+    const database = requireValue('DATABASE_PATH');
+    if (!posix.isAbsolute(database) || database.startsWith('/srv/ptraam/app/')) errors.push('DATABASE_PATH must be an absolute VPS path outside the application directory');
+  }
   if (requireValue('WORKFORCE_JOB_TOKEN').length < 32) errors.push('WORKFORCE_JOB_TOKEN must contain at least 32 characters');
   if (!/^[A-Za-z0-9_-]+$/.test(requireValue('GOOGLE_SPREADSHEET_ID'))) errors.push('GOOGLE_SPREADSHEET_ID must be an ID, not a URL');
   if (!/^[^\s@]+@[^\s@]+\.gserviceaccount\.com$/.test(requireValue('GOOGLE_CLIENT_EMAIL'))) errors.push('GOOGLE_CLIENT_EMAIL must be a service-account email');

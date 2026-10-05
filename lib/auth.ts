@@ -14,6 +14,8 @@ const LOCK_MINUTES = 15;
 
 let schemaReady: Promise<unknown> | null = null;
 export function ensureSchema() {
+  const database=db();
+  if(database.dialect==='mysql')return database.initialize!();
   schemaReady ??= db().batch([
     db().prepare(`CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY NOT NULL, phone TEXT NOT NULL UNIQUE, name TEXT NOT NULL, role TEXT NOT NULL, team TEXT, password_hash TEXT NOT NULL, status TEXT NOT NULL, failed_attempts INTEGER NOT NULL DEFAULT 0, locked_until INTEGER, created INTEGER NOT NULL, reviewed_by TEXT, reviewed_at INTEGER)`),
     db().prepare(`CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL, expires INTEGER NOT NULL)`),
