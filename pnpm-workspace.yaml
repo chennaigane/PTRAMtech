@@ -1,5 +1,7 @@
 autoInstallPeers: false
+
 allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+  es5-ext: true
