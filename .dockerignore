@@ -1,0 +1,16 @@
+﻿.git
+.github
+node_modules
+.next
+android
+.venv
+local-data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+.env.*
+!.env.example
+*.log
+*.backup
+.DS_Store
