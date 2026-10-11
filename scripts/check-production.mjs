@@ -15,10 +15,10 @@ export function checkProduction(env) {
     if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash || url.hostname === 'localhost' || url.hostname.endsWith('.example.com')) throw Error();
   } catch { errors.push('APP_ORIGIN must be the public HTTPS origin without a path'); }
   if(env.DATABASE_DRIVER&&!['mysql','sqlite'].includes(env.DATABASE_DRIVER))errors.push('DATABASE_DRIVER must be mysql or sqlite');
-  const mysql=env.DATABASE_DRIVER!=='sqlite'&&(env.DATABASE_DRIVER==='mysql'||['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'].some(key=>!!env[key]));
+  const mysql=env.DATABASE_DRIVER!=='sqlite'&&(env.DATABASE_DRIVER==='mysql'||['DB_SOCKET_PATH','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'].some(key=>!!env[key]));
   if(mysql){
-    for(const key of ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'])requireValue(key);
-    const port=Number(env.DB_PORT);if(!Number.isInteger(port)||port<1||port>65535)errors.push('DB_PORT must be a valid TCP port');
+    for(const key of (env.DB_SOCKET_PATH?['DB_SOCKET_PATH','DB_NAME','DB_USER','DB_PASSWORD']:['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD']))requireValue(key);
+    const port=Number(env.DB_PORT);if(!env.DB_SOCKET_PATH&&(!Number.isInteger(port)||port<1||port>65535))errors.push('DB_PORT must be a valid TCP port');
     if(env.DB_SSL&&!['true','false'].includes(env.DB_SSL))errors.push('DB_SSL must be true or false');
   }else{
     const database = requireValue('DATABASE_PATH');

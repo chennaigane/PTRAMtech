@@ -1,4 +1,6 @@
 import {test} from 'node:test';
+import mysql from 'mysql2/promise';
+import {mysqlSchema,mysqlBackfill} from '../db/mysql-schema.ts';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {db} from '../db/raw.ts';
@@ -30,6 +32,58 @@ test('MySQL configuration rejects partial credentials and preserves parameterize
   assert.equal(mysqlSql("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"),'INSERT INTO settings(`key`,value) VALUES(?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)');
   assert.equal(mysqlSql("SELECT json_extract(data,'$.employee') FROM records WHERE kind='key'"),"SELECT JSON_UNQUOTE(JSON_EXTRACT(data,'$.employee')) FROM records WHERE kind='key'");
   assert.throws(()=>mysqlSql('INSERT INTO workforce_locks VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET token=excluded.token WHERE expires<?'),/explicit MySQL/);
+});
+
+const socketEnv={DATABASE_DRIVER:'mysql',DB_SOCKET_PATH:'/cloudsql/project:region:instance',DB_NAME:'app',DB_USER:'user',DB_PASSWORD:'test-secret'};
+
+test('MySQL socket configuration requires credentials and ignores TCP settings',()=>{
+  assert.equal(mysqlConfigured({DB_SOCKET_PATH:socketEnv.DB_SOCKET_PATH}),true);
+  const config=mysqlConfig({...socketEnv,DB_HOST:'ignored',DB_PORT:'invalid'});
+  assert.equal(config.socketPath,socketEnv.DB_SOCKET_PATH);
+  assert.equal('host' in config,false);
+  assert.equal('port' in config,false);
+  assert.equal(config.database,'app');
+  assert.equal(config.user,'user');
+  assert.equal(config.password,'test-secret');
+  for(const key of ['DB_NAME','DB_USER','DB_PASSWORD']){
+    assert.throws(()=>mysqlConfig({...socketEnv,[key]:''}),error=>error.message.includes(key)&&!error.message.includes('test-secret'));
+  }
+});
+
+test('MySQL TCP configuration retains required host/port and verified TLS',()=>{
+  const env={DB_SOCKET_PATH:'',DB_HOST:'db',DB_PORT:'3307',DB_NAME:'app',DB_USER:'user',DB_PASSWORD:'test-secret'};
+  const config=mysqlConfig(env);
+  assert.equal(config.host,'db');assert.equal(config.port,3307);
+  assert.equal('socketPath' in config,false);
+  assert.equal(config.ssl,undefined);
+  assert.equal(mysqlConfig({...env,DB_SSL:'false'}).ssl,undefined);
+  assert.deepEqual(mysqlConfig({...env,DB_SSL:'true',DB_SSL_CA:'first\\nsecond'}).ssl,{rejectUnauthorized:true,ca:'first\nsecond'});
+  for(const key of ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'])assert.throws(()=>mysqlConfig({...env,[key]:''}),new RegExp(key));
+  for(const port of ['0','65536','1.5','invalid'])assert.throws(()=>mysqlConfig({...env,DB_PORT:port}),/DB_PORT/);
+  assert.throws(()=>mysqlConfig({...env,DB_SSL:'invalid'}),/DB_SSL/);
+});
+
+test('Socket pool receives configuration, initializes schema once, and rejects socket changes',async t=>{
+  const previousEnv={...process.env};
+  const previousDatabase=globalThis.ptraamDatabase,previousPath=globalThis.ptraamDatabasePath;
+  const queries=[];let released=0,closed=0,received;
+  const connection={query:async(sql)=>{queries.push(sql);return [[{acquired:1}]];},release:()=>released++};
+  t.mock.method(mysql,'createPool',options=>{received=options;return {getConnection:async()=>connection,end:async()=>{closed++;}};});
+  t.after(()=>{process.env=previousEnv;globalThis.ptraamDatabase=previousDatabase;globalThis.ptraamDatabasePath=previousPath;});
+  delete globalThis.ptraamDatabase;delete globalThis.ptraamDatabasePath;
+  Object.assign(process.env,socketEnv);
+  const store=db();
+  assert.equal(received.socketPath,socketEnv.DB_SOCKET_PATH);
+  assert.equal('host' in received,false);assert.equal('port' in received,false);
+  await Promise.all([store.initialize(),store.initialize()]);
+  assert.deepEqual(queries.slice(1,1+mysqlSchema.length),mysqlSchema);
+  assert.equal(queries[1+mysqlSchema.length],mysqlBackfill);
+  assert.ok(queries.includes("UPDATE users SET role='Employee' WHERE role='Representative'"));
+  assert.match(queries.at(-1),/RELEASE_LOCK/);assert.equal(released,1);
+  assert.equal(db(),store);
+  process.env.DB_SOCKET_PATH='/cloudsql/project:region:other';
+  assert.throws(()=>db(),/Restart the process/);
+  await store.close();assert.equal(closed,1);
 });
 
 test('MySQL integration: Admin, approvals, attendance, GPS, rollback, locks and persistence',{skip:process.env.MYSQL_INTEGRATION!=='1'},async t=>{

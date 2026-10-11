@@ -27,3 +27,18 @@ test('production config rejects placeholders, unsafe database location and malfo
   assert.ok(errors.length >= 6);
   assert.ok(!errors.join(' ').includes('private-secret-marker'));
 });
+
+
+test('production config accepts socket MySQL without TCP settings and requires credentials',()=>{
+  const env={...valid,DATABASE_PATH:undefined,DATABASE_DRIVER:'mysql',DB_SOCKET_PATH:'/cloudsql/project:region:instance',DB_NAME:'fieldora',DB_USER:'app',DB_PASSWORD:'test-secret'};
+  assert.deepEqual(checkProduction(env),[]);
+  assert.deepEqual(checkProduction({...env,DB_HOST:'ignored',DB_PORT:'invalid'}),[]);
+  for(const key of ['DB_NAME','DB_USER','DB_PASSWORD']){
+    const errors=checkProduction({...env,[key]:''});
+    assert.ok(errors.some(error=>error.includes(key)));
+    assert.ok(!errors.join(' ').includes('test-secret'));
+  }
+  const errors=checkProduction({...valid,DATABASE_PATH:undefined,DB_SOCKET_PATH:env.DB_SOCKET_PATH});
+  assert.ok(errors.some(error=>error.includes('DB_NAME')));
+  assert.ok(!errors.some(error=>/DB_HOST|DB_PORT|DATABASE_PATH/.test(error)));
+});

@@ -10,15 +10,15 @@ const state = globalThis as typeof globalThis & {ptraamDatabase?:Database;ptraam
 export function db():Database {
   const driver=process.env.DATABASE_DRIVER;
   if(driver&&!['mysql','sqlite'].includes(driver))throw new DatabaseSetupError('DATABASE_DRIVER must be mysql or sqlite.');
-  if(driver!=='sqlite'&&mysqlConfigured()){
+  if(driver==='mysql'||(driver!=='sqlite'&&mysqlConfigured())){
     const config=mysqlConfig();
-    const identity=JSON.stringify(['mysql',config.host,config.port,config.database,config.user]);
+    const identity=JSON.stringify(['mysql',config.socketPath,config.host,config.port,config.database,config.user]);
     if(state.ptraamDatabase&&state.ptraamDatabasePath!==identity)throw new DatabaseSetupError('Restart the process before changing database settings.');
     if(!state.ptraamDatabase){state.ptraamDatabase=openMySQL(config);state.ptraamDatabasePath=identity;}
     return state.ptraamDatabase;
   }
   const path = process.env.DATABASE_PATH || (process.env.NODE_ENV === 'development' ? resolve('local-data/ptraam.sqlite') : undefined);
-  if (!path) throw new DatabaseSetupError('Configure managed MySQL using DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASSWORD, or configure DATABASE_PATH for persistent SQLite.');
+  if (!path) throw new DatabaseSetupError('Configure managed MySQL using DB_NAME, DB_USER, DB_PASSWORD and either DB_SOCKET_PATH or DB_HOST and DB_PORT, or configure DATABASE_PATH for persistent SQLite.');
   if (state.ptraamDatabase && state.ptraamDatabasePath !== path) throw Error('Restart the process before changing DATABASE_PATH.');
   if (!state.ptraamDatabase) {
     try { state.ptraamDatabase = openDatabase(path); state.ptraamDatabasePath = path; }
