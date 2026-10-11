@@ -27,7 +27,11 @@ export function openMySQL(options:PoolOptions):Database {
         await c.query(mysqlBackfill);
         await c.query("UPDATE users SET role='Employee' WHERE role='Representative'");
       }finally{try{if(acquired)await c.query('SELECT RELEASE_LOCK(?)',[lockName('schema')]);}finally{c.release();}}
-    })().catch(error=>{ready=undefined;throw error;});
+    })().catch(cause=>{
+      ready=undefined;
+      if(cause instanceof DatabaseUnavailableError)throw cause;
+      throw new DatabaseUnavailableError('Unable to initialize managed MySQL. Check schema permissions and database availability.',{cause});
+    });
     await ready;
   }
   async function execute(sql:string,values:unknown[]):Promise<Result> {
