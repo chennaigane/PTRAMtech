@@ -18,3 +18,12 @@ outputs/
 **/build/
 local.properties
 *.tsbuildinfo
+# Local Android service configuration
+android/app/google-services.json
+
+# Local Gradle backup files
+android/app/build.gradle.backup
+android/build.gradle.backup
+
+# Local Android debug Firebase configuration
+android/app/src/debug/google-services.json

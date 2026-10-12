@@ -1,3 +1,5 @@
+import {resolveTripLocations} from '@/lib/trip-locations';
+import {tripLocationLabel} from '@/lib/trip-labels';
 import {createHash, randomBytes, randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {db} from '@/db/raw';
@@ -75,7 +77,8 @@ async function project(trip: Trip) {
     data.end = trip.stopped_at;
     data.status = data.status === 'Travelling' ? 'Pending' : data.status;
     data.endVerified = !!captured.length && Math.abs(trip.stopped_at - last.time) <= 120000;
-    data.endLocation = data.endVerified ? last : null;
+    data.endLocation = data.endVerified ? (data.endLocation?.lat===last.lat&&data.endLocation?.lng===last.lng&&data.endLocation?.time===last.time?{...data.endLocation,...last}:last) : null;
+    if(!data.endLocation?.address)data.to='';
     data.captureNote = data.endVerified ? 'Native GPS; physical-device validation pending.' : 'No fresh endpoint. Review required; endpoint was not invented.';
   }
   (await c.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(data),trip.id));
@@ -159,6 +162,10 @@ async function operation(req: Request, path: string, b: Record<string,unknown>) 
     return ingestMySQLPoints(account,trip.id,b.points,now,() => project(trip));
   }
   const at = z.number().int().positive().parse(b.stoppedAt), reason = z.string().max(100).parse(b.reason);
+  if(b.endpointSeq!==undefined&&trip.stopped_at===null){
+    const seq=z.number().int().positive().parse(b.endpointSeq);
+    if(seq!==trip.last_seq||Math.abs(at-trip.last_time)>1000)throw new PointError(409,'Synchronize the fresh final GPS point before stopping.');
+  }
   await atomic(async () => await stopTrip(trip,at,reason));
   return {};
 }
@@ -171,6 +178,12 @@ export async function mobileRequest(req: Request): Promise<Response> {
     await ensureSchema();
     // Match the lock used by web trip starts and administrative workforce changes.
     const result = await locked('workforce',() => operation(req,path,b));
+    // Enrich after commit so provider failures never affect point ACKs.
+    const tripId=path==='trips/start'?(result as {tripId?:string}).tripId:b.tripId;
+    if(typeof tripId==='string'&&['trips/start','trips/stop','trips/points'].includes(path)){
+      const data=await resolveTripLocations(tripId);
+      if(data)return Response.json({...result,journey:{format:'locality-v1',from:tripLocationLabel(data,'start'),to:tripLocationLabel(data,'end')}},{headers:{'Cache-Control':'no-store'}});
+    }
     return Response.json(result,{headers:{'Cache-Control':'no-store'}});
   } catch(e) {
     const status = e instanceof PointError ? e.status : e instanceof z.ZodError ? 400 : 409;

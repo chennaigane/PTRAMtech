@@ -38,10 +38,23 @@ final class Queue extends SQLiteOpenHelper {
     synchronized void stop(String reason) {
         getWritableDatabase().execSQL("UPDATE trip SET active=0,stoppedAt=?,reason=? WHERE active=1", new Object[]{System.currentTimeMillis(), reason});
     }
+    synchronized void finish(String id, Location location) throws Exception {
+        SQLiteDatabase d = getWritableDatabase(); d.beginTransaction();
+        try {
+            if (!active(id)) throw new java.io.IOException("Trip is no longer active");
+            add(id, location);
+            try (var row = d.rawQuery("SELECT lastElapsed FROM trip WHERE id=?", new String[]{id})) {
+                if (!row.moveToFirst() || row.getLong(0) != location.getElapsedRealtimeNanos())
+                    throw new java.io.IOException("A newer GPS point arrived. Retry stopping.");
+            }
+            d.execSQL("UPDATE trip SET active=0,stoppedAt=?,reason='employee_stopped_gps' WHERE id=? AND active=1", new Object[]{location.getTime(), id});
+            d.setTransactionSuccessful();
+        } finally { d.endTransaction(); }
+    }
     synchronized void add(String id, Location l) throws Exception {
         SQLiteDatabase d = getWritableDatabase(); d.beginTransaction();
         try (var r = d.rawQuery("SELECT nextSeq,lastElapsed FROM trip WHERE id=? AND active=1", new String[]{id})) {
-            if (!r.moveToFirst() || l.getElapsedRealtimeNanos() <= r.getLong(1)) return;
+            if (!r.moveToFirst() || l.getElapsedRealtimeNanos() <= r.getLong(1)) { d.setTransactionSuccessful(); return; }
             long seq = r.getLong(0);
             JSONObject p = new JSONObject().put("seq", seq).put("time", l.getTime()).put("elapsedMs", l.getElapsedRealtimeNanos() / 1000000)
                 .put("lat", l.getLatitude()).put("lng", l.getLongitude()).put("accuracy", l.getAccuracy());
@@ -53,9 +66,9 @@ final class Queue extends SQLiteOpenHelper {
     }
     synchronized JSONArray trips(String account) throws Exception {
         JSONArray a = new JSONArray();
-        try (var r = getReadableDatabase().rawQuery("SELECT id,active,stoppedAt,reason FROM trip WHERE account=? AND closed=0", new String[]{account})) {
+        try (var r = getReadableDatabase().rawQuery("SELECT id,active,stoppedAt,reason,nextSeq FROM trip WHERE account=? AND closed=0", new String[]{account})) {
             while (r.moveToNext()) a.put(new JSONObject().put("id", r.getString(0)).put("active", r.getInt(1) == 1)
-                .put("stoppedAt", r.getLong(2)).put("reason", r.getString(3)));
+                .put("stoppedAt", r.getLong(2)).put("reason", r.getString(3)).put("endpointSeq", r.getLong(4)-1));
         } return a;
     }
     synchronized JSONArray batch(String id) throws Exception {

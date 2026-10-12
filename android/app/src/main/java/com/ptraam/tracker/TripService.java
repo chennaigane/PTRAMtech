@@ -20,6 +20,8 @@ public final class TripService extends Service implements LocationListener {
     private String trip;
     private long leaseUntil;
     private boolean checking;
+    private LocationListener stopLocation;
+    private Runnable stopTimeout;
     private final Runnable tick = new Runnable() {
         public void run() {
             if (trip == null) return;
@@ -71,7 +73,7 @@ public final class TripService extends Service implements LocationListener {
     }
     public void onCreate() { super.onCreate(); queue = new Queue(this); gps = getSystemService(LocationManager.class); channel(this); }
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "STOP".equals(intent.getAction())) { end("employee_stopped"); return START_NOT_STICKY; }
+        if (intent != null && "STOP".equals(intent.getAction())) { requestStop(); return START_NOT_STICKY; }
         if (trip != null) return START_NOT_STICKY;
         if (intent == null || !"START".equals(intent.getAction()) || !permitted(this)) { end("start_denied"); return START_NOT_STICKY; }
         trip = intent.getStringExtra("tripId");
@@ -105,7 +107,45 @@ public final class TripService extends Service implements LocationListener {
     public void onProviderDisabled(String provider) { if (LocationManager.GPS_PROVIDER.equals(provider)) end("gps_disabled"); }
     public void onProviderEnabled(String provider) {}
     @SuppressWarnings("deprecation") public void onStatusChanged(String provider, int status, Bundle extras) {}
+    private void cancelStopCapture() {
+        if (stopLocation != null) { try { gps.removeUpdates(stopLocation); } catch (RuntimeException ignored) {} stopLocation = null; }
+        if (stopTimeout != null) { main.removeCallbacks(stopTimeout); stopTimeout = null; }
+    }
+    private void stopError(String message) {
+        cancelStopCapture();
+        getSharedPreferences("tracking-state", 0).edit().putString("sync", message).apply();
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
+    }
+    void requestStop() {
+        if (trip == null || stopLocation != null) return;
+        if (!permitted(this) || !gps.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            stopError("No precise GPS permission or signal. Enable Location and retry Stop trip."); return;
+        }
+        final long requested = SystemClock.elapsedRealtimeNanos();
+        getSharedPreferences("tracking-state", 0).edit().putString("sync", "Capturing a fresh destination (up to 45 seconds)...").apply();
+        stopLocation = new LocationListener() {
+            public void onLocationChanged(Location location) {
+                long age = SystemClock.elapsedRealtimeNanos() - location.getElapsedRealtimeNanos();
+                if (trip == null || location.getElapsedRealtimeNanos() < requested || age < 0 || age > 30000000000L
+                    || !location.hasAccuracy() || location.getAccuracy() <= 0 || location.getAccuracy() > 100 || location.isFromMockProvider()) return;
+                if (SystemClock.elapsedRealtime() >= leaseUntil) { end("policy_lease_expired"); return; }
+                try {
+                    // Final point and stop boundary persist together before GPS teardown.
+                    queue.finish(trip, location);
+                    end("employee_stopped");
+                    getSharedPreferences("tracking-state", 0).edit().putString("sync", "Destination saved. Queued points and address resolution sync when online.").apply();
+                } catch (Exception e) { stopError("Destination could not be saved. Retry Stop trip; existing GPS points are retained."); }
+            }
+            public void onProviderDisabled(String provider) { stopError("GPS was disabled. Enable Location and retry Stop trip."); }
+            public void onProviderEnabled(String provider) {}
+            @SuppressWarnings("deprecation") public void onStatusChanged(String provider, int status, Bundle extras) {}
+        };
+        stopTimeout = () -> stopError("No fresh accurate destination. Move outdoors and retry Stop trip.");
+        try { gps.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, stopLocation, Looper.getMainLooper()); main.postDelayed(stopTimeout, 45000); }
+        catch (RuntimeException e) { stopError("Location permission unavailable. Enable precise Location and retry Stop trip."); }
+    }
     private void end(String reason) {
+        cancelStopCapture();
         getSharedPreferences("tracking-state", 0).edit().putString("reason", reason).apply();
         trip = null; main.removeCallbacksAndMessages(null);
         try { gps.removeUpdates(this); } catch (RuntimeException ignored) {}
@@ -113,6 +153,7 @@ public final class TripService extends Service implements LocationListener {
         finally { running = null; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); SyncJob.schedule(this); }
     }
     public void onDestroy() {
+        cancelStopCapture();
         trip = null; running = null; main.removeCallbacksAndMessages(null);
         try { gps.removeUpdates(this); } catch (RuntimeException ignored) {}
         try { queue.stop("service_destroyed"); } catch (RuntimeException ignored) {}

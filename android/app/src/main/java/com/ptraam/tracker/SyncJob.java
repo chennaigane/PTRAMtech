@@ -34,7 +34,13 @@ public final class SyncJob extends JobService {
                             q.ack(id, points, response.getLong("ackSeq"));
                         }
                         if (!trip.getBoolean("active") && q.batch(id).length() == 0) {
-                            Api.postWithToken(this, "/trips/stop", new JSONObject().put("tripId", id).put("stoppedAt", trip.getLong("stoppedAt")).put("reason", trip.optString("reason", "stopped")), token);
+                            JSONObject stop = new JSONObject().put("tripId", id).put("stoppedAt", trip.getLong("stoppedAt")).put("reason", trip.optString("reason", "stopped"));
+                            // Old queues have no fresh-stop marker and retain their original protocol.
+                            if ("employee_stopped_gps".equals(trip.optString("reason"))) stop.put("endpointSeq", trip.getLong("endpointSeq"));
+                            JSONObject response = Api.postWithToken(this, "/trips/stop", stop, token);
+                            JSONObject journey = response.optJSONObject("journey");
+                            if (journey != null && "locality-v1".equals(journey.optString("format"))) getSharedPreferences("tracking-state", 0).edit().putString("journey-locality:" + account,
+                                journey.optString("from") + " → " + journey.optString("to") + "\nLocation names: Geoapify / © OpenStreetMap contributors").apply();
                             q.closed(id);
                         } else if (q.batch(id).length() > 0) retry = true;
                     }

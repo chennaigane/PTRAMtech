@@ -30,6 +30,7 @@ public final class MainActivity extends Activity {
                     + (TripService.running == null ? "\nStop reason: " + state.getString("reason", "No active trip") : "\n" + (lastFix == 0 ? "Waiting for a GPS fix." : "Last GPS fix: " + new java.util.Date(lastFix)))
                     + "\nQueued GPS points: " + q.count(Session.account(MainActivity.this))
                     + "\n" + state.getString("sync", "")
+                    + "\n" + state.getString("journey-locality:" + Session.account(MainActivity.this), "")
                     + "\n" + (Session.account(MainActivity.this).isEmpty() ? "Signed out" : "Signed in")
                     + "\nServer: " + (Backend.origin(MainActivity.this).isEmpty() ? "Not configured" : Backend.origin(MainActivity.this)));
             } catch (RuntimeException e) { tracking.setText("Local queue needs review. GPS has been stopped."); TripService.stop(MainActivity.this, "storage_error"); }
@@ -82,7 +83,12 @@ public final class MainActivity extends Activity {
                 .setMessage("Collect precise GPS for this work trip, including while locked or backgrounded, and upload it to PTRAAM as described above?")
                 .setNegativeButton("Cancel", null).setPositiveButton("Agree", (d, w) -> permissions()).show();
         });
-        button(layout, "Stop trip", () -> { generation++; busy = false; cancelLocation(); TripService.stop(this, "employee_stopped"); status.setText("Tracking stopped. Queued points and the stop record will sync when online."); });
+        button(layout, "Stop trip", () -> {
+            if (busy) return;
+            if (TripService.running == null) { status.setText("No active GPS trip. Sync queued trips if needed."); return; }
+            TripService.running.requestStop();
+            status.setText("Capturing the current destination. GPS stops after the endpoint is saved; addresses resolve when synchronized.");
+        });
         button(layout, "Log out", () -> {
             generation++; busy = false; cancelLocation(); TripService.stop(this, "logout");
             try {
@@ -136,10 +142,11 @@ public final class MainActivity extends Activity {
         LocationManager gps = getSystemService(LocationManager.class);
         if (!gps.isProviderEnabled(LocationManager.GPS_PROVIDER)) { fail("Enable Location (GPS), then try again outdoors."); return; }
         busy = true; status.setText("Waiting for a fresh GPS fix (up to 45 seconds)...");
+        final long requested = SystemClock.elapsedRealtimeNanos();
         startLocation = new LocationListener() {
             public void onLocationChanged(Location l) {
                 long age = SystemClock.elapsedRealtimeNanos() - l.getElapsedRealtimeNanos();
-                if (!l.hasAccuracy() || l.getAccuracy() <= 0 || l.getAccuracy() > 100 || age < 0 || age > 30000000000L || l.isFromMockProvider()) return;
+                if (!l.hasAccuracy() || l.getAccuracy() <= 0 || l.getAccuracy() > 100 || age < 0 || age > 30000000000L || l.getElapsedRealtimeNanos() < requested || l.isFromMockProvider()) return;
                 cancelLocation(); busy = false;
                 try { startTrip(new JSONObject().put("lat", l.getLatitude()).put("lng", l.getLongitude()).put("accuracy", l.getAccuracy()).put("time", l.getTime())); }
                 catch (Exception e) { fail("Unable to read the GPS fix."); }
@@ -180,6 +187,9 @@ public final class MainActivity extends Activity {
                             q.stop("start_cancelled"); SyncJob.schedule(this); busy = false; return;
                         }
                         startForegroundService(new Intent(this, TripService.class).setAction("START").putExtra("tripId", id).putExtra("leaseUntil", until));
+                        JSONObject journey = response.optJSONObject("journey");
+                        if (journey != null && "locality-v1".equals(journey.optString("format"))) getSharedPreferences("tracking-state", 0).edit().putString("journey-locality:" + account,
+                            journey.optString("from") + " → " + journey.optString("to") + "\nLocation names: Geoapify / © OpenStreetMap contributors").apply();
                         busy = false;
                     } catch (Exception e) { TripService.stop(this, "start_failed"); fail("Trip could not start safely."); }
                 });

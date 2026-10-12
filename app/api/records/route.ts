@@ -1,3 +1,4 @@
+import {resolveTripLocations} from '@/lib/trip-locations';
 import {profile,entry,dailyStatement,audit,policy} from '@/lib/workforce-store';
 import {travelMode,checkTripFix,checkOfficeStart} from '@/lib/travel-modes';
 import {istDate} from '@/lib/workforce-rules';
@@ -51,8 +52,8 @@ if(body.kind==='trip'){
       // Recording GPS, ending the trip and editing expenses: the traveller only.
       if(old.employee!==u.id)return deny('Only the employee who made this trip can update it.');
       if(old.status==='Travelling'&&(data.points.length<old.points.length||old.points.some((p:any,i:number)=>{const q=data.points[i];return p.time!==q.time||p.lat!==q.lat||p.lng!==q.lng||p.accuracy!==q.accuracy;})))throw new Error('Recorded GPS points cannot be changed.');
-      const ending=old.status==='Travelling'&&data.status==='Pending';if(old.status==='Travelling'){const extraPoints:Point[]=data.points.slice(old.points.length);if(extraPoints.some((p:Point,i:number)=>p.time<(i?extraPoints[i-1].time:old.points.at(-1)?.time||old.start)||p.time>Date.now()+5000||p.time<old.start-120000))throw new Error('GPS timestamps must follow the trip timeline.');}if(ending){const end=data.points.at(-1);if(!end)throw new Error('Get a fresh, accurate end location before stopping the trip.');checkTripFix(end);}if(ending&&data.to.length<2)throw new Error('Enter where you ended the trip.');
-      data={...old,...(ending?{endVerified:true,endLocation:{...data.points.at(-1),deviceTime:data.points.at(-1).time,time:Date.now()},routeSummary:{samples:data.points.length,from:old.from,to:data.to,distanceKm:tripKm(data.points)}}:{}),to:ending?data.to:old.to,points:old.status==='Travelling'?data.points:old.points,extra:data.extra,note:data.note,status:data.status,end:old.status==='Travelling'&&data.status==='Pending'?Date.now():old.end};}
+      const ending=old.status==='Travelling'&&data.status==='Pending';if(old.status==='Travelling'){const extraPoints:Point[]=data.points.slice(old.points.length);if(extraPoints.some((p:Point,i:number)=>p.time<(i?extraPoints[i-1].time:old.points.at(-1)?.time||old.start)||p.time>Date.now()+5000||p.time<old.start-120000))throw new Error('GPS timestamps must follow the trip timeline.');}if(ending){const end=data.points.at(-1);if(!end||data.points.length<=old.points.length||end.time<=old.points.at(-1)?.time)throw new Error('Get a fresh, accurate end location before stopping the trip.');checkTripFix(end);}
+      data={...old,...(ending?{endVerified:true,endLocation:{...data.points.at(-1),deviceTime:data.points.at(-1).time,time:Date.now()},routeSummary:{samples:data.points.length,from:old.from,to:'',distanceKm:tripKm(data.points)}}:{}),to:ending?'':old.to,points:old.status==='Travelling'?data.points:old.points,extra:data.extra,note:data.note,status:data.status,end:old.status==='Travelling'&&data.status==='Pending'?Date.now():old.end};}
     else{
       // Approve / mark paid: Admin, or the Manager of the employee's team (never their own claim).
       const owner=await person(old.employee);if(!owner||!canReview(u,owner))return deny(old.employee===u.id?'You cannot approve your own claim.':'You cannot approve this claim.');
@@ -75,4 +76,4 @@ export async function DELETE(req:Request){try{const u=await getSessionUser(req);
   return Response.json({ok:true});
 }catch(e:any){if(e?.issues)return Response.json({error:'Invalid trip.'},{status:400});console.error(e);return Response.json({error:'Unable to delete the trip. Please retry.'},{status:503});}}
 
-export async function POST(req:Request){await ensureSchema();try{return await locked('workforce',()=>saveRecord(req));}catch{return Response.json({error:'Another update is in progress. Retry shortly.'},{status:409});}}
+export async function POST(req:Request){await ensureSchema();try{const response=await locked('workforce',()=>saveRecord(req));if(response.ok){const saved=await response.clone().json();if(saved.data?.points){const data=await resolveTripLocations(saved.id);if(data)return Response.json({...saved,data});}}return response;}catch{return Response.json({error:'Another update is in progress. Retry shortly.'},{status:409});}}
