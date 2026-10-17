@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:drawable="@drawable/bg_button_disabled" />
+    <item android:state_pressed="true"><shape><solid android:color="@color/fieldora_pressed_overlay"/><corners android:radius="@dimen/radius_md"/><padding android:left="@dimen/space_md" android:top="@dimen/space_xs" android:right="@dimen/space_md" android:bottom="@dimen/space_xs"/></shape></item>
+    <item><shape><solid android:color="@color/fieldora_primary"/><corners android:radius="@dimen/radius_md"/><padding android:left="@dimen/space_md" android:top="@dimen/space_xs" android:right="@dimen/space_md" android:bottom="@dimen/space_xs"/></shape></item>
+</selector>

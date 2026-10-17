@@ -16,6 +16,7 @@ final class Backend {
             throw new IllegalArgumentException("Enter the HTTPS origin supplied by your Admin, without a path or credentials.");
         }
         if (!Session.account(c).isEmpty()) throw new IllegalStateException("Log out before changing the server.");
+        if (!c.getSharedPreferences("start-requests",0).getAll().isEmpty()) throw new IllegalStateException("Resolve pending trip starts on this server before changing it.");
         try (Queue q = new Queue(c)) { if (q.pending()) throw new IllegalStateException("Sync queued trips before changing the server."); }
         if (!c.getSharedPreferences("backend", 0).edit().putString("origin", "https://" + u.getRawAuthority()).commit())
             throw new java.io.IOException("Could not save server.");

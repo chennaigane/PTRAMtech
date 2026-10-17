@@ -26,7 +26,7 @@ final class Api {
             if (token != null) h.setRequestProperty("Authorization", "Bearer " + token);
             h.setDoOutput(true);
             try (var out = h.getOutputStream()) { out.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)); }
-            int code = h.getResponseCode();
+            int code = h.getResponseCode(); String contentType = h.getContentType();
             try (var in = code == 200 ? h.getInputStream() : h.getErrorStream()) {
                 if (in == null) throw new Failure(code);
                 java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
@@ -36,8 +36,17 @@ final class Api {
                     bytes.write(buffer, 0, count);
                 }
                 JSONObject response;
-                try { response = new JSONObject(bytes.toString("UTF-8")); }
-                catch (Exception e) { throw new Failure(code, "Server returned an unexpected response. Check the backend URL."); }
+                String raw = bytes.toString("UTF-8");
+                try { response = new JSONObject(raw); }
+                catch (Exception e) {
+                    String message = "Server returned an unexpected response. Check the backend URL.";
+                    if (BuildConfig.DEBUG) {
+                        String safe = raw.replaceAll("[\\r\\n\\t]+", " ").replaceAll("\\s+", " ").trim();
+                        if (safe.length() > 160) safe = safe.substring(0, 160) + "…";
+                        message += " HTTP " + code + ", Content-Type " + (contentType == null ? "unknown" : contentType) + ", endpoint /api/mobile/v1" + path + (safe.isEmpty() ? "" : ", response: " + safe);
+                    }
+                    throw new Failure(code, message);
+                }
                 if (code != 200) throw new Failure(code, response.optString("error", "API request failed (" + code + ")"));
                 return response;
             }

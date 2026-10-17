@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:background="@color/fieldora_background"><LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="@dimen/screen_horizontal_padding">
+    <TextView android:text="@string/leave_request" style="@style/Fieldora.Text.ScreenTitle" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    <Spinner android:id="@+id/leave_type" android:layout_width="match_parent" android:layout_height="@dimen/input_height" android:layout_marginTop="@dimen/space_lg" android:background="@drawable/bg_input_default" />
+    <Button android:id="@+id/leave_from" style="@style/Fieldora.Button.Secondary" android:text="From date" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+    <Button android:id="@+id/leave_to" style="@style/Fieldora.Button.Secondary" android:text="To date" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+    <EditText android:id="@+id/leave_reason" style="@style/Fieldora.Input" android:hint="Reason" android:inputType="textCapSentences|textMultiLine" android:minLines="3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+    <TextView android:id="@+id/leave_message" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+    <Button android:id="@+id/leave_submit" style="@style/Fieldora.Button.Primary" android:text="Submit leave request" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_md" />
+    <TextView android:text="Recent requests" style="@style/Fieldora.Text.SectionHeading" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+    <TextView android:id="@+id/leave_history" style="@style/Fieldora.Card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+    <Button android:id="@+id/leave_back" style="@style/Fieldora.Button.Secondary" android:text="@string/home" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+</LinearLayout></ScrollView>

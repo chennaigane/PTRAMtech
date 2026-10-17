@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="@color/fieldora_background">
+    <ScrollView android:id="@+id/dashboard_scroll" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingStart="@dimen/screen_horizontal_padding" android:paddingEnd="@dimen/screen_horizontal_padding" android:paddingTop="@dimen/space_lg" android:paddingBottom="@dimen/space_lg">
+            <TextView android:text="@string/dashboard_brand" style="@style/Fieldora.Text.Status" android:textColor="@color/fieldora_primary" android:letterSpacing="0.18" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            <TextView android:id="@+id/dashboard_greeting" style="@style/Fieldora.Text.ScreenTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+            <TextView android:id="@+id/dashboard_date" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xxs" />
+            <TextView android:id="@+id/network_banner" style="@style/Fieldora.Message.Info" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_md" android:visibility="gone" />
+            <TextView android:id="@+id/dashboard_message" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+
+            <TextView android:text="@string/today_status" style="@style/Fieldora.Text.SectionHeading" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+            <LinearLayout style="@style/Fieldora.Card.Attendance" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="@dimen/space_sm">
+                <TextView android:text="@string/attendance" style="@style/Fieldora.Text.CardTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                <TextView android:text="@string/attendance_unavailable" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+                <Button android:id="@+id/attendance_action" style="@style/Fieldora.Button.Secondary" android:text="@string/open_attendance" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_md" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/trip_card" style="@style/Fieldora.Card.Trip" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="@dimen/space_md">
+                <TextView android:id="@+id/trip_title" android:text="@string/field_trip" style="@style/Fieldora.Text.CardTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                <TextView android:id="@+id/trip_status" style="@style/Fieldora.Text.SectionHeading" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+                <TextView android:id="@+id/trip_gps" style="@style/Fieldora.Badge.Success" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" android:visibility="gone" />
+                <TextView android:id="@+id/trip_details" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+                <TextView android:id="@+id/sync_status" style="@style/Fieldora.Badge.Neutral" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+                <Button android:id="@+id/start_trip" style="@style/Fieldora.Button.Primary" android:text="@string/start_trip" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_md" />
+                <LinearLayout android:id="@+id/active_trip_actions" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="@dimen/space_md" android:visibility="gone">
+                    <Button android:id="@+id/view_trip" style="@style/Fieldora.Button.Secondary" android:text="@string/view_trip" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+                    <Space android:layout_width="@dimen/space_xs" android:layout_height="1dp" />
+                    <Button android:id="@+id/end_trip" style="@style/Fieldora.Button.Danger" android:text="@string/end_trip" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView android:text="@string/today_journey" style="@style/Fieldora.Text.SectionHeading" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+            <TextView android:id="@+id/journey_summary" style="@style/Fieldora.Card.Metric" android:text="@string/journey_unavailable" android:textColor="@color/fieldora_text_secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm" />
+
+            <TextView android:text="@string/quick_actions" style="@style/Fieldora.Text.SectionHeading" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="@dimen/space_sm">
+                <Button android:id="@+id/quick_attendance" style="@style/Fieldora.Button.Secondary" android:text="@string/attendance" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" /><Space android:layout_width="@dimen/space_xs" android:layout_height="1dp"/><Button android:id="@+id/quick_trips" style="@style/Fieldora.Button.Secondary" android:text="@string/trips" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="@dimen/space_xs">
+                <Button android:id="@+id/quick_leave" style="@style/Fieldora.Button.Secondary" android:text="@string/leave" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" /><Space android:layout_width="@dimen/space_xs" android:layout_height="1dp"/><Button android:id="@+id/quick_expenses" style="@style/Fieldora.Button.Secondary" android:text="@string/expenses" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="@dimen/space_xs">
+                <Button android:id="@+id/quick_emergency" style="@style/Fieldora.Button.Danger" android:text="@string/emergency" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" /><Space android:layout_width="@dimen/space_xs" android:layout_height="1dp"/><Button android:id="@+id/quick_profile" style="@style/Fieldora.Button.Secondary" android:text="@string/profile" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+            </LinearLayout>
+            <Button android:id="@+id/sync_now" style="@style/Fieldora.Button.Secondary" android:text="@string/sync_now" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+            <Button android:id="@+id/logout" style="@style/Fieldora.Button.Secondary" android:text="@string/logout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+        </LinearLayout>
+    </ScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:background="@color/fieldora_surface" android:padding="@dimen/space_xs">
+        <Button android:id="@+id/nav_home" style="@style/Fieldora.Button.Primary" android:text="@string/home" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+        <Button android:id="@+id/nav_trips" style="@style/Fieldora.Button.Secondary" android:text="@string/trips" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+        <Button android:id="@+id/nav_attendance" style="@style/Fieldora.Button.Secondary" android:text="@string/attendance" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+        <Button android:id="@+id/nav_leave" style="@style/Fieldora.Button.Secondary" android:text="@string/leave" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+        <Button android:id="@+id/nav_profile" style="@style/Fieldora.Button.Secondary" android:text="@string/profile" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+    </LinearLayout>
+</LinearLayout>

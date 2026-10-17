@@ -1,4 +1,5 @@
 'use client';
+import {ensureNativeLocation,locationDeniedMessage} from '@/lib/native-android';
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {departments,istDate,type Policy} from '@/lib/workforce-rules';
 import {departmentLabel} from '@/lib/departments';
@@ -8,7 +9,7 @@ import {canReview} from '@/lib/permissions';
 import type {User} from '@/lib/auth';
 type Data={people:User[];profiles:(Partial<Profile>&{employee:string})[];policy:Policy;entries:Entry[];payrollAccess:boolean;audit:{actor:string;action:string;target:string;details:string;created:number}[];sync:null|{configured:boolean;alert?:{tab:string;message:string;detected:number};status:string;error?:string;finished?:number}};
 const currentDate=()=>istDate();
-function gps():Promise<{lat:number;lng:number;accuracy:number;time:number}>{return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(Error('Location is unavailable on this device.'));navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy,time:p.timestamp}),()=>reject(Error('Location failed. Allow precise location permission and try again, or request an exception.')),{enableHighAccuracy:true,maximumAge:0,timeout:20000});});}
+async function gps():Promise<{lat:number;lng:number;accuracy:number;time:number}>{await ensureNativeLocation();return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(Error('Location is unavailable on this device.'));navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy,time:p.timestamp}),e=>reject(Error(e.code===1?locationDeniedMessage():'No valid GPS fix. Enable Location, move outdoors and retry, or request an exception.')),{enableHighAccuracy:true,maximumAge:0,timeout:20000});});}
 export default function WorkforcePanel({me}:{me:User}){
  const [data,setData]=useState<Data|null>(null),[section,setSection]=useState('My day'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState(''),[chosen,setChosen]=useState('');
  const load=useCallback(async()=>{const r=await fetch('/api/workforce');const d=await r.json() as Data & {error?:string};if(!r.ok)throw Error(d.error);setData(d);},[]);

@@ -121,6 +121,48 @@ test('browser permission denied, missing GPS and weak signal show retryable erro
  t.mock.timers.tick(15000);await assert.rejects(pending,/100 m or better/);
 });
 
+test('Phase 1A versioned ACKs include locality without rewriting approved replay history',async t=>{
+ let now=Date.now();t.mock.method(Date,'now',()=>now);
+ t.mock.method(globalThis,'fetch',async url=>Number(new URL(url).searchParams.get('lat'))===21?response('Start area','City','Country'):response('End area','City','Country'));
+ const call=async(path,body,token)=>{const r=await mobileRequest(new Request(origin+'/api/mobile/v1/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)}));return {status:r.status,body:await r.json()};};
+ const token=(await call('session',{phone:'+919000000001',password:'Test-password1'})).body.accessToken;
+ const capabilities=await call('capabilities',{},token);assert.equal(capabilities.body.structuredStopAcknowledgement,true);
+ const requestId=randomUUID(),started=await call('trips/start/endpoint-v1',{requestId,fix:point(21,71),stopContract:1},token);
+ assert.equal(started.body.startContract,'fieldora.endpoint.v1');assert.equal(started.body.requestId,requestId);
+ assert.equal(started.body.journey.from,'Start area');const id=started.body.tripId;now+=1000;
+ const endpoint={...point(21.01,71.01),seq:1,elapsedMs:1000};
+ assert.equal((await call('trips/points/endpoint-v1',{tripId:id,points:[endpoint]},token)).body.ackSeq,1);
+ const stop={tripId:id,stoppedAt:now,reason:'employee_stopped',endpoint:{version:1,status:'captured',seq:1}};
+ const stopped=await call('trips/stop/endpoint-v1',stop,token);
+ assert.deepEqual(stopped.body,{tripId:id,stoppedAt:now,endpointStatus:'captured',finalSeq:1,journey:{format:'locality-v1',from:'Start area',to:'End area'}});
+ const data=stored(id);data.status='Paid';data.approval={by:employee};data.payment={reference:'existing'};
+ sqlite.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(data),id);
+ const before=sqlite.prepare('SELECT data FROM records WHERE id=?').get(id).data;
+ const audits=sqlite.prepare('SELECT * FROM workforce_audit WHERE target=? ORDER BY id').all(id);
+ now+=60000;
+ assert.equal((await call('trips/points/endpoint-v1',{tripId:id,points:[endpoint]},token)).body.ackSeq,1);
+ assert.deepEqual((await call('trips/stop/endpoint-v1',stop,token)).body,stopped.body);
+ assert.equal(sqlite.prepare('SELECT data FROM records WHERE id=?').get(id).data,before);
+ assert.deepEqual(sqlite.prepare('SELECT * FROM workforce_audit WHERE target=? ORDER BY id').all(id),audits);
+});
+
+test('geocoding outage cannot weaken versioned final sequence acknowledgement or rewrite retries',async t=>{
+ let now=Date.now();t.mock.method(Date,'now',()=>now);
+ t.mock.method(globalThis,'fetch',async()=>{throw Error('offline provider');});
+ const call=async(path,body,token)=>{const r=await mobileRequest(new Request(origin+'/api/mobile/v1/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)}));return {status:r.status,body:await r.json()};};
+ const token=(await call('session',{phone:'+919000000001',password:'Test-password1'})).body.accessToken;
+ const start=await call('trips/start/endpoint-v1',{requestId:randomUUID(),fix:point(22,72)},token),id=start.body.tripId;now+=1000;
+ const endpoint={...point(22.01,72.01),seq:1,elapsedMs:1000};
+ assert.equal((await call('trips/points/endpoint-v1',{tripId:id,points:[endpoint]},token)).body.ackSeq,1);
+ const stop={tripId:id,stoppedAt:now,reason:'employee_stopped',endpoint:{status:'captured',seq:2}};
+ assert.equal((await call('trips/stop/endpoint-v1',stop,token)).status,409);
+ stop.endpoint.seq=1;const ack=await call('trips/stop/endpoint-v1',stop,token);
+ assert.equal(ack.status,200);assert.equal(ack.body.finalSeq,1);assert.equal(ack.body.endpointStatus,'captured');
+ assert.equal(ack.body.journey.to,'Locality pending');const before=stored(id);now+=60000;
+ assert.deepEqual((await call('trips/stop/endpoint-v1',stop,token)).body,ack.body);
+ assert.deepEqual(stored(id),before);
+});
+
 test('browser discards stale fixes and preserves actual device timestamp',async()=>{
  let callback;
  const captured=captureGps({watchPosition(ok){callback=ok;return 1;},clearWatch(){}});

@@ -13,6 +13,11 @@ export const canView = (me: Person, p: Person) => me.role === 'Admin' || me.id =
 /** May approve / mark paid this person's claims and acknowledge their incidents. Managers cannot self-approve. */
 export const canReview = (me: Person, p: Person) => me.role === 'Admin' || inTeam(me, p);
 
+/** Existing claim policy permits scoped trip payments only. Attendance/leave
+ * management is not payment authority; unsupported resources fail closed. */
+export const canPay = (me: Person, p: Person, resource: string) =>
+  resource === 'trip' && canReview(me, p);
+
 export const can = {
   companyDashboard: (me: Person) => (me.role === 'Admin' || me.role === 'Manager'),
   manageAccounts: (me: Person) => me.role === 'Admin',

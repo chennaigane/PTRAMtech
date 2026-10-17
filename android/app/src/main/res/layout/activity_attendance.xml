@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="@dimen/screen_horizontal_padding" android:background="@color/fieldora_background">
+    <TextView android:text="@string/attendance" style="@style/Fieldora.Text.ScreenTitle" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    <TextView android:id="@+id/attendance_status" style="@style/Fieldora.Card.Attendance" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" android:text="@string/loading" />
+    <TextView android:id="@+id/attendance_message" style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_md" />
+    <Button android:id="@+id/attendance_check_in" style="@style/Fieldora.Button.Primary" android:text="@string/check_in" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+    <Button android:id="@+id/attendance_check_out" style="@style/Fieldora.Button.Secondary" android:text="@string/check_out" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+    <Button android:id="@+id/attendance_back" style="@style/Fieldora.Button.Secondary" android:text="@string/home" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+</LinearLayout>

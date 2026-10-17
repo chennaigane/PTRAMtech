@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Canonical Fieldora palette from app/globals.css. -->
+    <color name="fieldora_primary">#274F89</color>
+    <color name="fieldora_primary_dark">#244D87</color>
+    <color name="fieldora_primary_light">#EAF0F9</color>
+    <color name="fieldora_secondary">#FFD166</color>
+    <color name="fieldora_accent">#B92A30</color>
+
+    <color name="fieldora_background">#F5F7FB</color>
+    <color name="fieldora_surface">#FFFFFF</color>
+    <color name="fieldora_surface_alt">#F0F3F8</color>
+    <color name="fieldora_text_primary">#1D2C46</color>
+    <color name="fieldora_text_secondary">#61718A</color>
+    <color name="fieldora_text_muted">#78869A</color>
+    <color name="fieldora_text_on_primary">#FFFFFF</color>
+    <color name="fieldora_border">#DFE5EF</color>
+    <color name="fieldora_focus">#6B8FC6</color>
+
+    <color name="fieldora_success">#1F6A3B</color>
+    <color name="fieldora_success_background">#E7F6EC</color>
+    <color name="fieldora_warning">#80662E</color>
+    <color name="fieldora_warning_background">#FFF8E8</color>
+    <color name="fieldora_warning_border">#EFDFB7</color>
+    <color name="fieldora_error">#8A2C2C</color>
+    <color name="fieldora_error_background">#FDF3F3</color>
+    <color name="fieldora_error_border">#EFC9C9</color>
+    <color name="fieldora_info">#274F89</color>
+    <color name="fieldora_info_background">#EAF0F9</color>
+    <color name="fieldora_info_border">#C9D7EB</color>
+    <color name="fieldora_trip_active">#2F9E5B</color>
+    <color name="fieldora_attendance_checked_in">#1F8A4C</color>
+    <color name="fieldora_disabled">#E4E8EF</color>
+    <color name="fieldora_disabled_text">#8A95A5</color>
+    <color name="fieldora_pressed_overlay">#1D406F</color>
+</resources>

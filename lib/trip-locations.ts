@@ -14,9 +14,11 @@ async function read(id:string){
 }
 // Called only AFTER the trip/points transaction commits. A provider outage must
 // never roll back GPS evidence or turn a successful stop into a failed operation.
-export async function resolveTripLocations(id:string){
+export async function resolveTripLocations(id:string,enrich=true){
   try{
     const original=await read(id);if(!original)return null;
+    // ACK retries may display existing labels, but must not rewrite history.
+    if(!enrich)return original;
     const updates:{side:'start'|'end';point:any;result:Awaited<ReturnType<typeof reverseGeocode>>}[]=[];
     for(const side of ['start','end'] as const){
       const point=tripEndpoint(original,side);

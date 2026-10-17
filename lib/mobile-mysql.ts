@@ -1,3 +1,4 @@
+import {redeemWebTicket} from '@/lib/web-native-session';
 import {resolveTripLocations} from '@/lib/trip-locations';
 import {tripLocationLabel} from '@/lib/trip-labels';
 import {createHash, randomBytes, randomUUID} from 'node:crypto';
@@ -11,7 +12,9 @@ import {profile, policy, entry, dailyStatement, audit} from '@/lib/workforce-sto
 import {travelMode, checkTripFix, checkOfficeStart} from '@/lib/travel-modes';
 import {istDate} from '@/lib/workforce-rules';
 import {getRate} from '@/lib/settings';
-import {tripKm, type Point} from '@/lib/geo';
+import {tripKm} from '@/lib/geo';
+import {MOBILE_CONTRACT, stopEndpoint, projectEndpoint, stopAcknowledgement, legacyStopEvidence, type Endpoint} from '@/lib/mobile-endpoint';
+import {mobileWorkforce} from '@/lib/mobile-workforce';
 
 const LEASE = 300000, SESSION = 60 * 60 * 1000, UPLOAD = 7 * 86400000;
 const digest = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -56,7 +59,7 @@ async function identity(req: Request): Promise<Identity> {
   const session = (await c.prepare('SELECT account,expires FROM mobile_sessions WHERE token_hash=?').get(hash));
   if (!session || Number(session.expires) <= Date.now()) throw new PointError(401,'Session expired. Sign in again to sync.');
   const user = (await c.prepare('SELECT id,phone,name,role,team,status,created FROM users WHERE id=?').get(session.account!)) as unknown as User;
-  if (!user || user.status !== 'active' || user.role !== 'Employee') throw new PointError(403,'Approved employee access required.');
+  if (!user || user.status !== 'active' || !['Admin','Manager','Employee'].includes(user.role)) throw new PointError(403,'Approved account access required.');
   return {user,hash,expires:Number(session.expires)};
 }
 async function tripFor(id: unknown, account: string): Promise<Trip> {
@@ -64,7 +67,7 @@ async function tripFor(id: unknown, account: string): Promise<Trip> {
   if (!trip) throw new PointError(404,'Trip not found.');
   return trip;
 }
-async function project(trip: Trip) {
+async function project(trip: Trip, endpoint?:Endpoint) {
   const c = storage();
   const row = (await c.prepare("SELECT data FROM records WHERE id=? AND kind='trip'").get(trip.id));
   if (!row) throw new PointError(409,'Trip record requires review.');
@@ -72,28 +75,24 @@ async function project(trip: Trip) {
   const captured = (await c.prepare('SELECT payload FROM mobile_points WHERE trip=? ORDER BY seq').all(trip.id)).map(r => JSON.parse(String(r.payload)));
   data.points = [data.points[0], ...captured];
   data.km = tripKm(data.points); data.amount = +(data.km * data.rate + data.extra).toFixed(2);
-  if (trip.stopped_at !== null) {
-    const last: Point = data.points.at(-1);
-    data.end = trip.stopped_at;
-    data.status = data.status === 'Travelling' ? 'Pending' : data.status;
-    data.endVerified = !!captured.length && Math.abs(trip.stopped_at - last.time) <= 120000;
-    data.endLocation = data.endVerified ? (data.endLocation?.lat===last.lat&&data.endLocation?.lng===last.lng&&data.endLocation?.time===last.time?{...data.endLocation,...last}:last) : null;
-    if(!data.endLocation?.address)data.to='';
-    data.captureNote = data.endVerified ? 'Native GPS; physical-device validation pending.' : 'No fresh endpoint. Review required; endpoint was not invented.';
-  }
+  if (endpoint) data.endpoint = endpoint;
+  if (trip.stopped_at !== null) projectEndpoint(data,captured,trip.stopped_at);
   (await c.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(data),trip.id));
 }
-async function stopTrip(trip: Trip, at: number, reason: string) {
+async function stopTrip(trip: Trip, at: number, reason: string, input?:unknown) {
   if (trip.stopped_at !== null) return;
   const c = storage();
   const cutoff = Math.max(trip.started_at, trip.last_time, Math.min(at, Date.now(), trip.capture_until));
+  const last = await c.prepare('SELECT payload FROM mobile_points WHERE trip=? ORDER BY seq DESC LIMIT 1').get(trip.id);
+  const endpoint = stopEndpoint(input,reason,at,cutoff,last ? JSON.parse(String(last.payload)) : undefined);
   (await c.prepare('UPDATE mobile_trips SET stopped_at=?,capture_until=? WHERE id=?').run(cutoff,cutoff,trip.id));
-  await project({...trip,stopped_at:cutoff,capture_until:cutoff});
-  (await c.prepare('INSERT INTO workforce_audit VALUES(?,?,?,?,?,?)').run(randomUUID(),trip.account,'mobile.trip.stop',trip.id,JSON.stringify({reason}),Date.now()));
+  await project({...trip,stopped_at:cutoff,capture_until:cutoff},endpoint);
+  (await c.prepare('INSERT INTO workforce_audit VALUES(?,?,?,?,?,?)').run(randomUUID(),trip.account,'mobile.trip.stop',trip.id,JSON.stringify({reason,endpoint}),Date.now()));
 }
 async function atomic<T>(work:()=>Promise<T>):Promise<T>{return db().transaction!(work);}
-async function operation(req: Request, path: string, b: Record<string,unknown>) {
+async function operation(req: Request, path: string, b: Record<string,unknown>, enrich:(id:string)=>void) {
   const c = storage(), now = Date.now();
+  if (path === 'session/web') return redeemWebTicket(req,b);
   if (path === 'session') {
     await limit('login-global:all',300,60000);
     const phone = normalizePhone(b.phone);
@@ -101,15 +100,17 @@ async function operation(req: Request, path: string, b: Record<string,unknown>) 
     await limit('login-phone:' + digest(phone),10,900000);
     const result = await checkLogin(phone,b.password);
     if ('error' in result) throw new PointError(result.status,result.error);
-    if (result.user.role !== 'Employee') throw new PointError(403,'Admin and Manager accounts use the web dashboard.');
+    if (!['Admin','Manager','Employee'].includes(result.user.role)) throw new PointError(403,'Approved account access required.');
     const token = randomBytes(32).toString('hex');
     (await c.prepare('DELETE FROM mobile_sessions WHERE expires<=?').run(now));
     (await c.prepare('INSERT INTO mobile_sessions VALUES(?,?,?)').run(digest(token),result.user.id,now+SESSION));
-    return {accountId:result.user.id,accessToken:token,expiresAt:now+SESSION,name:result.user.name,role:result.user.role};
+    const department=(await profile(result.user.id)).department;
+    return {accountId:result.user.id,accessToken:token,expiresAt:now+SESSION,name:result.user.name,role:result.user.role,department,travelMode:travelMode(department)};
   }
   // Revalidate inside the workforce lock: an approval/role change cannot be hidden by the UI.
   const auth = await identity(req), account = auth.user.id;
   await limit('account:' + account,120,60000);
+  if (path === 'capabilities') return MOBILE_CONTRACT;
   if (path === 'session/logout') {
     await atomic(async () => {
       for (const t of (await c.prepare('SELECT * FROM mobile_trips WHERE session_hash=? AND stopped_at IS NULL').all(auth.hash))) await stopTrip(t as unknown as Trip,now,'logout');
@@ -117,10 +118,26 @@ async function operation(req: Request, path: string, b: Record<string,unknown>) 
     });
     return {};
   }
-  if (path === 'trips/start') {
+  const versionedStart = path === 'trips/start/endpoint-v1';
+  const startContract = 'fieldora.endpoint.v1';
+  if (path === 'trips/start/endpoint-v1/recover') {
     const requestId = uuid.parse(b.requestId);
+    const old = await c.prepare('SELECT * FROM mobile_trips WHERE account=? AND request_id=?').get(account,requestId) as Trip | undefined;
+    await atomic(async () => {
+      const cancelled = await c.prepare("SELECT id FROM workforce_audit WHERE actor=? AND action='mobile.start.cancel' AND target=?").get(account,requestId);
+      if (!cancelled) await c.prepare('INSERT INTO workforce_audit VALUES(?,?,?,?,?,?)').run(randomUUID(),account,'mobile.start.cancel',requestId,'{}',now);
+      if (old) await stopTrip(old,now,'start_cancelled');
+    });
+    return {startContract,requestId,accountId:account,recovered:true};
+  }
+  const workforce=await mobileWorkforce(account,path,b);if(workforce)return workforce;
+  if (path === 'trips/start' || versionedStart) {
+    if (b.stopContract !== undefined && b.stopContract !== MOBILE_CONTRACT.stopContract) throw new PointError(409,'Unsupported mobile stop contract. Update Fieldora before starting a trip.');
+    const requestId = uuid.parse(b.requestId);
+    if (versionedStart && (await c.prepare("SELECT id FROM workforce_audit WHERE actor=? AND action='mobile.start.cancel' AND target=?").get(account,requestId))) throw new PointError(409,'This start request was cancelled. Use a new request ID.');
+    const contract = versionedStart ? {startContract,requestId,accountId:account} : {};
     const old = (await c.prepare('SELECT * FROM mobile_trips WHERE account=? AND request_id=?').get(account,requestId)) as unknown as Trip | undefined;
-    if (old) return {tripId:old.id,leaseMs:old.stopped_at === null && old.session_hash === auth.hash ? Math.max(0,Math.min(LEASE,old.capture_until-now,auth.expires-now)) : 0};
+    if (old) return {...contract,tripId:old.id,leaseMs:old.stopped_at === null && old.session_hash === auth.hash ? Math.max(0,Math.min(LEASE,old.capture_until-now,auth.expires-now)) : 0};
     for (const t of (await c.prepare('SELECT * FROM mobile_trips WHERE account=? AND stopped_at IS NULL AND capture_until<=?').all(account,now))) await atomic(async () => await stopTrip(t as unknown as Trip,Number(t.capture_until),'lease_expired'));
     const mode = travelMode((await profile(account)).department);
     if (mode === 'office') throw new PointError(403,'Your department uses office attendance, not trip tracking.');
@@ -130,16 +147,19 @@ async function operation(req: Request, path: string, b: Record<string,unknown>) 
     if ((await c.prepare("SELECT id FROM records WHERE kind='trip' AND json_extract(data,'$.employee')=? AND json_extract(data,'$.status')='Travelling'").get(account))) throw new PointError(409,'An existing trip must be stopped or reviewed first.');
     const id = randomUUID(), deadline = Math.min(now+LEASE,auth.expires), rate = await getRate();
     const startLocation = {...point,deviceTime:point.time,time:now,...(officeDistance === null ? {} : {officeDistance})};
-    const data = {employee:account,source:'android',mode,from:mode==='driver'?'Office':'',to:'',points:[point],note:'',extra:0,rate,start:now,startVerified:true,startLocation,end:null,status:'Travelling',km:0,amount:0};
+    const data = {employee:account,source:'android',mode,from:mode==='driver'?'Office':'',to:'',points:[point],note:z.string().trim().max(500).optional().parse(b.note)||'',extra:0,rate,start:now,startVerified:true,startLocation,end:null,status:'Travelling',km:0,amount:0};
     await db().batch([
       db().prepare('INSERT INTO mobile_trips(id,account,started_at,capture_until,upload_until,request_id,session_hash) VALUES(?,?,?,?,?,?,?)').bind(id,account,now,deadline,now+UPLOAD,requestId,auth.hash),
       db().prepare("INSERT INTO records VALUES(?,'ptraam','trip',?,?)").bind(id,JSON.stringify(data),now),
       dailyStatement(account,istDate(),{status:'Present',fieldStart:{tripId:id,mode,time:now,location:startLocation},reconciled:false}),
       audit(account,'mobile.trip.start',id,{mode}),
     ]);
-    return {tripId:id,leaseMs:deadline-now};
+    enrich(id);
+    return {...contract,tripId:id,leaseMs:deadline-now};
   }
-  if (!['trips/lease','trips/points','trips/stop'].includes(path)) throw new PointError(404,'Endpoint not found.');
+  if (path === 'trips/points/endpoint-v1') path = 'trips/points';
+  if (path === 'trips/lease/endpoint-v1') path = 'trips/lease';
+  if (!['trips/lease','trips/points','trips/stop','trips/stop/endpoint-v1'].includes(path)) throw new PointError(404,'Endpoint not found.');
   const trip = await tripFor(b.tripId,account);
   if (path === 'trips/lease') {
     const mode = travelMode((await profile(account)).department);
@@ -162,12 +182,11 @@ async function operation(req: Request, path: string, b: Record<string,unknown>) 
     return ingestMySQLPoints(account,trip.id,b.points,now,() => project(trip));
   }
   const at = z.number().int().positive().parse(b.stoppedAt), reason = z.string().max(100).parse(b.reason);
-  if(b.endpointSeq!==undefined&&trip.stopped_at===null){
-    const seq=z.number().int().positive().parse(b.endpointSeq);
-    if(seq!==trip.last_seq||Math.abs(at-trip.last_time)>1000)throw new PointError(409,'Synchronize the fresh final GPS point before stopping.');
-  }
-  await atomic(async () => await stopTrip(trip,at,reason));
-  return {};
+  const evidence = trip.stopped_at === null ? legacyStopEvidence(path,b.endpoint,b.endpointSeq,reason,at,trip.last_seq,trip.last_time) : {reason,endpoint:b.endpoint};
+  await atomic(async () => await stopTrip(trip,at,evidence.reason,evidence.endpoint));
+  if (trip.stopped_at === null) enrich(trip.id);
+  const stopped = await c.prepare('SELECT data FROM records WHERE id=?').get(trip.id);
+  return stopAcknowledgement(trip.id,JSON.parse(String(stopped!.data)));
 }
 export async function mobileRequest(req: Request): Promise<Response> {
 
@@ -177,11 +196,13 @@ export async function mobileRequest(req: Request): Promise<Response> {
     const b = await body(req);
     await ensureSchema();
     // Match the lock used by web trip starts and administrative workforce changes.
-    const result = await locked('workforce',() => operation(req,path,b));
+    let enrichId:string|undefined;
+    const result = await locked('workforce',() => operation(req,path,b,id=>{enrichId=id;}));
     // Enrich after commit so provider failures never affect point ACKs.
-    const tripId=path==='trips/start'?(result as {tripId?:string}).tripId:b.tripId;
-    if(typeof tripId==='string'&&['trips/start','trips/stop','trips/points'].includes(path)){
-      const data=await resolveTripLocations(tripId);
+    const route=path.replace(/\/endpoint-v1$/,'');
+    const tripId=route==='trips/start'?(result as {tripId?:string}).tripId:b.tripId;
+    if(typeof tripId==='string'&&['trips/start','trips/stop','trips/points'].includes(route)){
+      const data=await resolveTripLocations(tripId,tripId===enrichId);
       if(data)return Response.json({...result,journey:{format:'locality-v1',from:tripLocationLabel(data,'start'),to:tripLocationLabel(data,'end')}},{headers:{'Cache-Control':'no-store'}});
     }
     return Response.json(result,{headers:{'Cache-Control':'no-store'}});

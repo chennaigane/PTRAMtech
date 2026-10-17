@@ -59,14 +59,15 @@ export async function monthlyPayroll(month:string,u:User){
  }
  return rows;
 }
+export class ReviewDeniedError extends Error {}
 export async function review(u:User,id:string,status:'Approved'|'Rejected',reason:string){
- const e=await entry(id);if(!e||!['leave','exception','overtime'].includes(e.kind))throw Error('Request not found.');
- await allowed(u,e.employee,true);if(e.data.status!=='Pending')throw Error('This request was already reviewed.');
+ const e=await entry(id);if(!e||!['leave','exception','overtime'].includes(e.kind))throw new ReviewDeniedError('Request not found.');
+ await allowed(u,e.employee,true);if(e.data.status!=='Pending')throw new ReviewDeniedError('This request was already reviewed.');
  const data={...e.data,status,reviewedBy:u.id,reviewedAt:Date.now(),reviewReason:reason};
  if(e.kind==='leave'&&status==='Approved'&&e.data.paid){
-  const p=await policy(),type=p.leaveTypes.find(t=>t.name===e.data.type);if(!type)throw Error('Leave type is no longer configured.');
+  const p=await policy(),type=p.leaveTypes.find(t=>t.name===e.data.type);if(!type)throw new ReviewDeniedError('Leave type is no longer configured.');
   const used=(await entries('leave')).filter(l=>l.id!==id&&l.employee===e.employee&&l.data.type===e.data.type&&l.data.status==='Approved'&&l.date.slice(0,4)===e.date.slice(0,4)).reduce((n,l)=>n+l.data.days.length,0);
-  if(used+e.data.days.length>type.annual)throw Error('Insufficient leave balance.');
+  if(used+e.data.days.length>type.annual)throw new ReviewDeniedError('Insufficient leave balance.');
  }
  const update=db().prepare("UPDATE workforce_entries SET data=?,updated=? WHERE id=? AND json_extract(data,'$.status')='Pending'").bind(JSON.stringify(data),Date.now(),id);
  const statements=[update,audit(u.id,e.kind+'.'+status,id,{reason})];

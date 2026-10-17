@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="@dimen/screen_horizontal_padding" android:background="@color/fieldora_background">
+    <TextView android:text="@string/profile" style="@style/Fieldora.Text.ScreenTitle" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    <TextView android:id="@+id/profile_details" style="@style/Fieldora.Card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+    <Button android:id="@+id/profile_settings" style="@style/Fieldora.Button.Secondary" android:text="@string/settings" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+    <Button android:id="@+id/profile_logout" style="@style/Fieldora.Button.Danger" android:text="@string/logout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs" />
+    <Button android:id="@+id/profile_back" style="@style/Fieldora.Button.Secondary" android:text="@string/home" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_lg" />
+</LinearLayout>

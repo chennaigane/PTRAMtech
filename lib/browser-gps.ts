@@ -1,7 +1,11 @@
+import {inAndroid,ensureNativeLocation,locationDeniedMessage} from '@/lib/native-android';
 import {checkTripFix} from '@/lib/travel-modes';
 import type {Point} from '@/lib/geo';
 
 export function captureGps(geolocation:Geolocation|undefined=navigator.geolocation):Promise<Point>{
+  return inAndroid()?ensureNativeLocation().then(()=>captureFix(geolocation)):captureFix(geolocation);
+}
+function captureFix(geolocation:Geolocation|undefined):Promise<Point>{
   return new Promise((resolve,reject)=>{
     if(!geolocation){reject(Error('GPS is unavailable in this browser.'));return;}
     let id:number|undefined,best:Point|undefined,done=false;
@@ -20,7 +24,7 @@ export function captureGps(geolocation:Geolocation|undefined=navigator.geolocati
         if(!best||point.accuracy<best.accuracy)best=point;
         if(point.accuracy<=30)finish();
       },e=>{
-        if(e.code===1)finish(Error('Location permission denied. Allow precise location in browser settings and retry.'));
+        if(e.code===1)finish(Error(locationDeniedMessage()));
         else if(e.code===2)finish(Error('GPS is unavailable. Turn on Location, move outdoors and retry.'));
       },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
       if(done)geolocation.clearWatch(id);

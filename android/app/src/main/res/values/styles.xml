@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Fieldora.Text.ScreenTitle" parent="">
+        <item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textSize">30sp</item><item name="android:fontFamily">sans</item><item name="android:textStyle">bold</item>
+    </style>
+    <style name="Fieldora.Text.SectionHeading" parent="">
+        <item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textSize">20sp</item><item name="android:fontFamily">sans-medium</item>
+    </style>
+    <style name="Fieldora.Text.CardTitle" parent="">
+        <item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textSize">17sp</item><item name="android:fontFamily">sans-medium</item>
+    </style>
+    <style name="Fieldora.Text.Body" parent="">
+        <item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textSize">16sp</item><item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+    <style name="Fieldora.Text.Body.Secondary">
+        <item name="android:textColor">@color/fieldora_text_secondary</item><item name="android:textSize">14sp</item><item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+    <style name="Fieldora.Text.Caption" parent="">
+        <item name="android:textColor">@color/fieldora_text_muted</item><item name="android:textSize">12sp</item>
+    </style>
+    <style name="Fieldora.Text.Button" parent="">
+        <item name="android:textSize">14sp</item><item name="android:fontFamily">sans-medium</item><item name="android:textAllCaps">false</item>
+    </style>
+    <style name="Fieldora.Text.Status" parent="">
+        <item name="android:textSize">12sp</item><item name="android:fontFamily">sans-medium</item>
+    </style>
+    <style name="Fieldora.Text.Metric" parent="">
+        <item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textSize">32sp</item><item name="android:fontFamily">sans-medium</item>
+    </style>
+
+    <style name="Fieldora.Button.Base" parent="android:style/Widget.Material.Button">
+        <item name="android:minHeight">@dimen/button_height</item><item name="android:minWidth">@dimen/touch_target_min</item><item name="android:paddingStart">@dimen/space_md</item><item name="android:paddingEnd">@dimen/space_md</item><item name="android:textSize">14sp</item><item name="android:fontFamily">sans-medium</item><item name="android:textAllCaps">false</item><item name="android:stateListAnimator">@null</item>
+    </style>
+    <style name="Fieldora.Button.Primary" parent="Fieldora.Button.Base"><item name="android:background">@drawable/bg_button_primary</item><item name="android:textColor">@color/button_primary_text</item></style>
+    <style name="Fieldora.Button.Secondary" parent="Fieldora.Button.Base"><item name="android:background">@drawable/bg_button_secondary</item><item name="android:textColor">@color/button_secondary_text</item></style>
+    <style name="Fieldora.Button.Danger" parent="Fieldora.Button.Base"><item name="android:background">@drawable/bg_button_danger</item><item name="android:textColor">@color/button_primary_text</item></style>
+    <style name="Fieldora.Button.Disabled" parent="Fieldora.Button.Base"><item name="android:background">@drawable/bg_button_disabled</item><item name="android:textColor">@color/fieldora_disabled_text</item><item name="android:enabled">false</item></style>
+
+    <style name="Fieldora.Input" parent="android:style/Widget.Material.EditText">
+        <item name="android:background">@drawable/bg_input_field</item><item name="android:textColor">@color/fieldora_text_primary</item><item name="android:textColorHint">@color/fieldora_text_muted</item><item name="android:minHeight">@dimen/input_height</item><item name="android:paddingStart">@dimen/space_sm</item><item name="android:paddingEnd">@dimen/space_sm</item><item name="android:paddingTop">@dimen/space_xs</item><item name="android:paddingBottom">@dimen/space_xs</item><item name="android:textSize">16sp</item>
+    </style>
+    <style name="Fieldora.Input.Error" parent="Fieldora.Input"><item name="android:background">@drawable/bg_input_error</item></style>
+
+    <style name="Fieldora.Card" parent=""><item name="android:background">@drawable/bg_card</item><item name="android:padding">@dimen/card_padding</item><item name="android:elevation">1dp</item></style>
+    <style name="Fieldora.Card.Metric" parent="Fieldora.Card" />
+    <style name="Fieldora.Card.Attendance" parent="Fieldora.Card" />
+    <style name="Fieldora.Card.Trip" parent="Fieldora.Card" />
+    <style name="Fieldora.Card.Leave" parent="Fieldora.Card" />
+    <style name="Fieldora.Card.Warning" parent="Fieldora.Card"><item name="android:background">@drawable/bg_card_warning</item></style>
+
+    <style name="Fieldora.Badge.Base" parent=""><item name="android:minHeight">24dp</item><item name="android:paddingStart">@dimen/space_xs</item><item name="android:paddingEnd">@dimen/space_xs</item><item name="android:gravity">center</item><item name="android:textSize">12sp</item><item name="android:fontFamily">sans-medium</item></style>
+    <style name="Fieldora.Badge.Success" parent="Fieldora.Badge.Base"><item name="android:background">@drawable/badge_success</item><item name="android:textColor">@color/fieldora_success</item></style>
+    <style name="Fieldora.Badge.Warning" parent="Fieldora.Badge.Base"><item name="android:background">@drawable/badge_warning</item><item name="android:textColor">@color/fieldora_warning</item></style>
+    <style name="Fieldora.Badge.Error" parent="Fieldora.Badge.Base"><item name="android:background">@drawable/badge_error</item><item name="android:textColor">@color/fieldora_error</item></style>
+    <style name="Fieldora.Badge.Info" parent="Fieldora.Badge.Base"><item name="android:background">@drawable/badge_info</item><item name="android:textColor">@color/fieldora_info</item></style>
+    <style name="Fieldora.Badge.Neutral" parent="Fieldora.Badge.Base"><item name="android:background">@drawable/bg_badge_neutral</item><item name="android:textColor">@color/fieldora_text_secondary</item></style>
+    <style name="Fieldora.Message.Error" parent="Fieldora.Text.Body.Secondary"><item name="android:background">@drawable/bg_message_error</item><item name="android:textColor">@color/fieldora_error</item><item name="android:padding">@dimen/space_sm</item></style>
+    <style name="Fieldora.Message.Info" parent="Fieldora.Text.Body.Secondary"><item name="android:background">@drawable/bg_message_info</item><item name="android:textColor">@color/fieldora_info</item><item name="android:padding">@dimen/space_sm</item></style>
+</resources>

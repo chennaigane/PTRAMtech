@@ -1,0 +1,5 @@
+package com.ptraam.tracker;
+import android.app.*;import android.content.*;import android.net.Uri;import android.os.Bundle;import android.widget.TextView;
+public final class ProfileActivity extends Activity{
+ @Override public void onCreate(Bundle b){super.onCreate(b);if(!Session.valid(this)){login();return;}setContentView(R.layout.activity_profile);((TextView)findViewById(R.id.profile_details)).setText(Session.name(this)+"\n"+Session.role(this)+"\n"+Session.department(this));findViewById(R.id.profile_settings).setOnClickListener(v->startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));findViewById(R.id.profile_logout).setOnClickListener(v->{TripService.stop(this,"logout");Session.clear(this);login();});findViewById(R.id.profile_back).setOnClickListener(v->finish());}private void login(){startActivity(new Intent(this,LoginActivity.class).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK|Intent.FLAG_ACTIVITY_NEW_TASK));finish();}
+}

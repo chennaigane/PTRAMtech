@@ -10,35 +10,73 @@ import android.os.*;
 import java.util.concurrent.*;
 import org.json.JSONObject;
 
-public final class TripService extends Service implements LocationListener {
+public class TripService extends Service implements LocationListener {
     static final String CHANNEL = "trip-tracking";
     static volatile TripService running;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService network = Executors.newSingleThreadExecutor();
-    private Queue queue;
     private LocationManager gps;
     private String trip;
+    private String account;
     private long leaseUntil;
-    private boolean checking;
-    private LocationListener stopLocation;
-    private Runnable stopTimeout;
+    private boolean checking, listening, terminating, ready, destroyed;
+    private final EndTripCapture ending = new EndTripCapture();
+    private final java.util.concurrent.atomic.AtomicInteger outstandingWrites = new java.util.concurrent.atomic.AtomicInteger();
+    // Only the FIFO storage executor accesses this latch. Later success must not erase a gap.
+    private boolean routeWriteFailed;
+    int outstandingWrites() { return outstandingWrites.get(); }
+    // Package-scoped platform seams let instrumentation invoke the actual service callbacks.
+    Queue openQueue() { return new Queue(this); }
+    void executeStorage(Runnable work) { QueueIO.execute(work); }
+    boolean locationPermission() { return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED; }
+    String currentAccount() { return Session.account(this); }
+    boolean authorized() { return Session.current(this); }
+    boolean validateToken() { return Session.valid(this); }
+    void removeLocations() { gps.removeUpdates(this); }
+    void requestLocations(long interval) {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+            throw new SecurityException("Location permission revoked before listener registration");
+        gps.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval, 0, this, Looper.getMainLooper());
+    }
+    boolean gpsEnabled() { return gps.isProviderEnabled(LocationManager.GPS_PROVIDER); }
+    boolean canStart() { return permitted(this); }
+    void foreground(Notification n) { if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION); else startForeground(1,n); }
+    void finishService() { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); }
+    void scheduleSync() { SyncJob.schedule(this); }
+    void startLeaseChecks() { main.post(tick); }
+    static String liveTrip() { return running == null || running.terminating ? null : running.trip; }
+    static void recover(Context c) {
+        Context app = c.getApplicationContext(); String live = liveTrip(); long at = System.currentTimeMillis();
+        QueueIO.execute(() -> { try (Queue q = new Queue(app)) { QueueIO.recoverOnce(q, live, at); }
+            catch (RuntimeException e) { app.getSharedPreferences("tracking-state",0).edit().putString("syncPhase","REVIEW_REQUIRED").putString("sync","Local recovery needs review.").apply(); }
+            SyncJob.schedule(app);
+        });
+    }
+    private final Runnable guard = new Runnable() {
+        public void run() {
+            if (trip == null || !checkSafety()) return;
+            main.postDelayed(this, Math.max(1, Math.min(1000, leaseUntil - SystemClock.elapsedRealtime())));
+        }
+    };
     private final Runnable tick = new Runnable() {
         public void run() {
             if (trip == null) return;
-            if (!permitted(TripService.this) || !gps.isProviderEnabled(LocationManager.GPS_PROVIDER)) { end("permission_or_gps_revoked"); return; }
-            if (SystemClock.elapsedRealtime() >= leaseUntil) { end("policy_lease_expired"); return; }
+            if (!checkSafety()) return;
+            ensureLocationListener();
+            if (trip == null) return;
             if (!checking) {
                 checking = true;
                 String requestedTrip = trip;
                 long requestedAt = SystemClock.elapsedRealtime();
                 network.execute(() -> {
                     try {
-                        JSONObject response = Api.post(TripService.this, "/trips/lease", new JSONObject().put("tripId", requestedTrip), true);
+                        JSONObject response = Api.post(TripService.this, "/trips/lease/endpoint-v1", new JSONObject().put("tripId", requestedTrip), true);
                         main.post(() -> {
                             checking = false;
                             if (!requestedTrip.equals(trip)) return;
                             if (!response.optBoolean("active", false)) { end("policy_ended"); return; }
                             leaseUntil = requestedAt + Math.min(300000, Math.max(0, response.optLong("leaseMs", 0)));
+                            checkSafety();
                         });
                     } catch (Exception e) {
                         main.post(() -> {
@@ -62,102 +100,207 @@ public final class TripService extends Service implements LocationListener {
             && n.areNotificationsEnabled() && channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
     static void stop(Context c, String reason) {
-        // Main thread: disable storage before requesting service teardown, even when no service exists.
-        try (Queue q = new Queue(c)) { q.stop(reason); }
-        catch (RuntimeException ignored) { /* Storage failure must not prevent GPS teardown. */ }
-        finally {
-            if (running != null) running.end(reason);
-            else c.stopService(new Intent(c, TripService.class));
-            SyncJob.schedule(c);
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            new Handler(Looper.getMainLooper()).post(() -> stop(c.getApplicationContext(), reason));
+            return;
         }
+        // Safety stops remove the listener before any potentially blocking storage work.
+        if (running != null) { running.end(reason); return; }
+        c.stopService(new Intent(c, TripService.class));
+        Context app = c.getApplicationContext();
+        QueueIO.execute(() -> { try (Queue q = new Queue(app)) { q.stop(reason); }
+            catch (RuntimeException e) { QueueIO.recoveryRequired(); app.getSharedPreferences("tracking-state",0).edit().putString("endStatus","GPS stopped; local queue needs review.").apply(); }
+            finally { SyncJob.schedule(app); }
+        });
     }
-    public void onCreate() { super.onCreate(); queue = new Queue(this); gps = getSystemService(LocationManager.class); channel(this); }
+    static void endTrip(Context c) {
+        if (running != null) running.requestEnd();
+        else stop(c, "endpoint_unavailable");
+    }
+    boolean isEnding() { return ending.waiting() || terminating; }
+    public void onCreate() {
+        super.onCreate(); gps = getSystemService(LocationManager.class); channel(this);
+    }
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && "STOP".equals(intent.getAction())) { requestStop(); return START_NOT_STICKY; }
+        if (terminating) return START_NOT_STICKY;
+        if (intent != null && ("STOP".equals(intent.getAction()) || "STOP_NOW".equals(intent.getAction()))) {
+            String target = intent.getStringExtra("tripId");
+            if (trip != null && target != null && !trip.equals(target)) return START_NOT_STICKY;
+            if ("STOP_NOW".equals(intent.getAction())) end("immediate_stop"); else requestEnd();
+            return START_NOT_STICKY;
+        }
         if (trip != null) return START_NOT_STICKY;
-        if (intent == null || !"START".equals(intent.getAction()) || !permitted(this)) { end("start_denied"); return START_NOT_STICKY; }
-        trip = intent.getStringExtra("tripId");
+        if (intent == null || !"START".equals(intent.getAction())) { end("start_denied"); return START_NOT_STICKY; }
+        String incomingTrip = intent.getStringExtra("tripId");
+        if (!MobileContract.validTripId(incomingTrip)) { end("invalid_start"); return START_NOT_STICKY; }
+        trip = incomingTrip;
+        account = currentAccount();
         leaseUntil = intent.getLongExtra("leaseUntil", 0);
-        if (trip == null || !queue.active(trip) || SystemClock.elapsedRealtime() >= leaseUntil) { end("invalid_start"); return START_NOT_STICKY; }
+        // MainActivity has already committed this identity; denial must close it too.
+        if (!canStart()) { end("start_denied"); return START_NOT_STICKY; }
+        if (trip == null || !authorized() || SystemClock.elapsedRealtime() >= leaseUntil) { end("invalid_start"); return START_NOT_STICKY; }
         try {
-            Intent stop = new Intent(this, TripService.class).setAction("STOP");
+            Intent stop = new Intent(this, TripService.class).setAction("STOP").putExtra("tripId", trip);
             PendingIntent stopAction = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             PendingIntent open = PendingIntent.getActivity(this, 2, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-            Notification n = new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                .setContentTitle("Fieldora trip tracking active").setContentText("Collecting GPS for your trip. Tap Stop trip to end.")
-                .setContentIntent(open).setOngoing(true).setCategory(Notification.CATEGORY_SERVICE)
-                .setVisibility(Notification.VISIBILITY_PRIVATE).addAction(new Notification.Action.Builder(null, "Stop trip", stopAction).build()).build();
-            if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION); else startForeground(1, n);
+            Notification n = notification(open, stopAction, "Location tracking is active for your field trip.");
+            foreground(n);
             running = this;
-            getSharedPreferences("tracking-state", 0).edit().putLong("lastFix", 0).putString("reason", "").apply();
-            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { end("permission_revoked"); return START_NOT_STICKY; }
-            gps.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10000, 0, this, Looper.getMainLooper());
-            main.post(tick);
+            getSharedPreferences("tracking-state", 0).edit().putLong("lastFix", 0).putString("reason", "").putString("endStatus", "").putString("gpsStatus", "GPS Active").apply();
+            String requestedTrip = trip;
+            main.post(guard);
+            executeStorage(() -> {
+                boolean active = false;
+                try (Queue q = openQueue()) { active = q.active(requestedTrip) && validateToken(); }
+                catch (RuntimeException ignored) {}
+                final boolean allowed = active;
+                main.post(() -> {
+                    if (terminating || !requestedTrip.equals(trip)) return;
+                    if (!allowed) { end("invalid_start"); return; }
+                    if (!checkSafety()) return;
+                    try { ready = true; requestLocations(10000); listening = true; startLeaseChecks(); }
+                    catch (RuntimeException e) { end("location_start_failed"); }
+                });
+            });
         } catch (RuntimeException e) { end("location_start_failed"); }
         return START_NOT_STICKY;
     }
     public void onLocationChanged(Location l) {
-        if (trip == null) return;
-        if (!permitted(this) || SystemClock.elapsedRealtime() >= leaseUntil) { end("permission_or_policy_expired"); return; }
-        long age = SystemClock.elapsedRealtimeNanos() - l.getElapsedRealtimeNanos();
-        if (age < 0 || age > 60000000000L || !l.hasAccuracy() || l.getAccuracy() <= 0 || l.getAccuracy() > 100 || l.isFromMockProvider()) return;
-        try { queue.add(trip, l); getSharedPreferences("tracking-state", 0).edit().putLong("lastFix", l.getTime()).apply(); SyncJob.schedule(this); }
-        catch (Exception e) { end("local_storage_failed"); }
-    }
-    public void onProviderDisabled(String provider) { if (LocationManager.GPS_PROVIDER.equals(provider)) end("gps_disabled"); }
-    public void onProviderEnabled(String provider) {}
-    @SuppressWarnings("deprecation") public void onStatusChanged(String provider, int status, Bundle extras) {}
-    private void cancelStopCapture() {
-        if (stopLocation != null) { try { gps.removeUpdates(stopLocation); } catch (RuntimeException ignored) {} stopLocation = null; }
-        if (stopTimeout != null) { main.removeCallbacks(stopTimeout); stopTimeout = null; }
-    }
-    private void stopError(String message) {
-        cancelStopCapture();
-        getSharedPreferences("tracking-state", 0).edit().putString("sync", message).apply();
-        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show();
-    }
-    void requestStop() {
-        if (trip == null || stopLocation != null) return;
-        if (!permitted(this) || !gps.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            stopError("No precise GPS permission or signal. Enable Location and retry Stop trip."); return;
+        if (trip == null || terminating || !ready) return;
+        if (!checkSafety()) return;
+        if (ending.waiting()) {
+            long validatedAt = System.currentTimeMillis();
+            if (!ending.accepts(SystemClock.elapsedRealtimeNanos(), l.getElapsedRealtimeNanos(), validatedAt, l.getTime(),
+                l.getLatitude(), l.getLongitude(), l.hasAccuracy() ? l.getAccuracy() : Float.NaN, mock(l))) return;
+            if (!ending.freeze()) return;
+            end("employee_stopped", new Location(l), validatedAt);
+            return;
         }
-        final long requested = SystemClock.elapsedRealtimeNanos();
-        getSharedPreferences("tracking-state", 0).edit().putString("sync", "Capturing a fresh destination (up to 45 seconds)...").apply();
-        stopLocation = new LocationListener() {
-            public void onLocationChanged(Location location) {
-                long age = SystemClock.elapsedRealtimeNanos() - location.getElapsedRealtimeNanos();
-                if (trip == null || location.getElapsedRealtimeNanos() < requested || age < 0 || age > 30000000000L
-                    || !location.hasAccuracy() || location.getAccuracy() <= 0 || location.getAccuracy() > 100 || location.isFromMockProvider()) return;
-                if (SystemClock.elapsedRealtime() >= leaseUntil) { end("policy_lease_expired"); return; }
-                try {
-                    // Final point and stop boundary persist together before GPS teardown.
-                    queue.finish(trip, location);
-                    end("employee_stopped");
-                    getSharedPreferences("tracking-state", 0).edit().putString("sync", "Destination saved. Queued points and address resolution sync when online.").apply();
-                } catch (Exception e) { stopError("Destination could not be saved. Retry Stop trip; existing GPS points are retained."); }
-            }
-            public void onProviderDisabled(String provider) { stopError("GPS was disabled. Enable Location and retry Stop trip."); }
-            public void onProviderEnabled(String provider) {}
-            @SuppressWarnings("deprecation") public void onStatusChanged(String provider, int status, Bundle extras) {}
-        };
-        stopTimeout = () -> stopError("No fresh accurate destination. Move outdoors and retry Stop trip.");
-        try { gps.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 0, stopLocation, Looper.getMainLooper()); main.postDelayed(stopTimeout, 45000); }
-        catch (RuntimeException e) { stopError("Location permission unavailable. Enable precise Location and retry Stop trip."); }
+        long age = SystemClock.elapsedRealtimeNanos() - l.getElapsedRealtimeNanos();
+        if (age < 0 || age > 60000000000L || !l.hasAccuracy() || !Float.isFinite(l.getAccuracy()) || l.getAccuracy() <= 0 || l.getAccuracy() > 100 || mock(l)) return;
+        String id = trip; Location frozen = new Location(l);
+        String write = java.util.UUID.randomUUID().toString();
+        outstandingWrites.incrementAndGet();
+        executeStorage(() -> {
+            boolean saved = false;
+            try {
+                for (int attempt = 0; attempt < 2 && !saved; attempt++) {
+                    try (Queue q = openQueue()) { q.writeTracked(id,write,frozen); saved = true; }
+                    catch (Exception e) { /* One bounded retry, ahead of all later points/closure. */ }
+                }
+                if (saved) {
+                    main.post(() -> { if (!terminating && id.equals(trip)) getSharedPreferences("tracking-state",0).edit().putLong("lastFix",frozen.getTime()).putString("gpsStatus","GPS Active").apply(); });
+                } else {
+                    routeWriteFailed = true;
+                    // Independent fallback if SQLite itself could not retain the journal marker.
+                    getSharedPreferences("route-review",0).edit().putBoolean(id,true).commit();
+                    reportRouteReview();
+                    main.post(() -> { if (!terminating && id.equals(trip)) end("local_storage_failed"); });
+                }
+            } finally { outstandingWrites.decrementAndGet(); scheduleSync(); }
+        });
     }
-    private void end(String reason) {
-        cancelStopCapture();
-        getSharedPreferences("tracking-state", 0).edit().putString("reason", reason).apply();
-        trip = null; main.removeCallbacksAndMessages(null);
-        try { gps.removeUpdates(this); } catch (RuntimeException ignored) {}
-        try { queue.stop(reason); } catch (RuntimeException ignored) {}
-        finally { running = null; stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); SyncJob.schedule(this); }
+    private void reportRouteReview() {
+        getSharedPreferences("tracking-state",0).edit().putString("syncPhase","REVIEW_REQUIRED")
+            .putString("sync",Queue.ROUTE_REVIEW).putString("endStatus",Queue.ROUTE_REVIEW).apply();
+    }
+    public void onProviderDisabled(String provider) { if (LocationManager.GPS_PROVIDER.equals(provider)) { if (ending.waiting()) end("endpoint_gps_disabled"); else locationUnavailable("Location is unavailable. Turn on device location to continue accurate trip tracking."); } }
+    public void onProviderEnabled(String provider) { if (LocationManager.GPS_PROVIDER.equals(provider)) ensureLocationListener(); }
+    @SuppressWarnings("deprecation") public void onStatusChanged(String provider, int status, Bundle extras) {}
+    @SuppressWarnings("deprecation") private static boolean mock(Location l) { return Build.VERSION.SDK_INT >= 31 ? l.isMock() : l.isFromMockProvider(); }
+    private boolean checkSafety() {
+        if (terminating) return false;
+        String reason = ending.stopReason(SystemClock.elapsedRealtimeNanos(), leaseUntil,
+            locationPermission(),
+            account != null && account.equals(currentAccount()) && authorized());
+        if (reason != null) { end(reason); return false; }
+        return trip != null;
+    }
+    private void requestEnd() {
+        if (trip == null || !ready) { end("endpoint_unavailable"); return; }
+        if (!checkSafety() || !ending.begin(SystemClock.elapsedRealtimeNanos())) return;
+        getSharedPreferences("tracking-state", 0).edit().putString("gpsStatus", "Ending trip: waiting up to 30 seconds for final GPS.").apply();
+        main.postDelayed(() -> { if (trip != null && ending.waiting()) end("endpoint_timeout"); }, 30000);
+        try {
+            if (!gpsEnabled()) { end("endpoint_gps_disabled"); return; }
+            removeLocations();
+            requestLocations(1000);
+            listening = true;
+            updateNotification("Ending trip: waiting up to 30 seconds for final GPS. Stop now skips the endpoint.");
+        } catch (SecurityException e) { end("permission_revoked"); }
+        catch (RuntimeException e) { end("endpoint_unavailable"); }
+    }
+    private Notification notification(PendingIntent open, PendingIntent stop, String text) {
+        Notification.Builder builder = new Notification.Builder(this, CHANNEL).setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Fieldora — Field Trip Active").setContentText(text).setContentIntent(open)
+            .setOngoing(true).setCategory(Notification.CATEGORY_SERVICE).setVisibility(Notification.VISIBILITY_PRIVATE);
+        if (!terminating) builder.addAction(new Notification.Action.Builder(null, ending.waiting() ? "Stop now" : "End trip", stop).build());
+        return builder.build();
+    }
+    private void locationUnavailable(String message) {
+        if (trip == null) return;
+        listening = false;
+        getSharedPreferences("tracking-state", 0).edit().putString("gpsStatus", message).apply();
+        try { removeLocations(); } catch (RuntimeException ignored) {}
+        updateNotification(message);
+    }
+    void updateNotification(String message) {
+        Intent stop = new Intent(this, TripService.class).setAction(ending.waiting() ? "STOP_NOW" : "STOP").putExtra("tripId", trip);
+        PendingIntent stopAction = PendingIntent.getService(this, 1, stop, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent open = PendingIntent.getActivity(this, 2, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        getSystemService(NotificationManager.class).notify(1, notification(open, stopAction, message));
+    }
+    private void ensureLocationListener() {
+        if (trip == null || terminating || !ready) return;
+        if (!locationPermission()) { end("permission_revoked"); return; }
+        if (!gpsEnabled()) { locationUnavailable("Location is unavailable. Turn on device location to continue accurate trip tracking."); return; }
+        if (!listening) try {
+            requestLocations(ending.waiting() ? 1000 : 10000); listening = true;
+            getSharedPreferences("tracking-state", 0).edit().putString("gpsStatus", "GPS Active").apply();
+        } catch (SecurityException e) { end("permission_revoked"); }
+    }
+    private void end(String reason) { end(reason, null, System.currentTimeMillis()); }
+    private void end(String reason, Location endpoint, long at) {
+        if (terminating) return;
+        terminating = true; ending.finish();
+        final String id = trip;
+        listening = false; main.removeCallbacksAndMessages(null);
+        try { removeLocations(); } catch (RuntimeException ignored) {}
+        getSharedPreferences("tracking-state",0).edit().putString("reason",reason)
+            .putString("gpsStatus","GPS stopped; saving trip.").putString("endStatus","GPS stopped; local persistence pending.").apply();
+        try { updateNotification("GPS stopped. Saving trip safely; synchronization pending."); }
+        catch (RuntimeException ignored) { /* Revoked notification permission cannot delay teardown. */ }
+        // Keep the service alive while committing, but no GPS or safety control waits on storage.
+        executeStorage(() -> {
+            String message;
+            try (Queue q = openQueue()) {
+                if (outstandingWrites.get() != 0) throw new IllegalStateException("GPS writes must finish before closure");
+                if (id != null && routeWriteFailed) q.markWrite(id,"failed:"+id);
+                boolean captured = id != null && endpoint != null && q.finish(id, endpoint, reason, at);
+                if (!captured && id != null) q.stop(id, reason, at);
+                boolean incomplete = id != null && (q.routeIncomplete(id) || getSharedPreferences("route-review",0).getBoolean(id,false));
+                if (incomplete) reportRouteReview();
+                message = incomplete ? Queue.ROUTE_REVIEW : captured ? "Trip ended. Final GPS coordinate saved; synchronization pending."
+                    : "Trip ended. Destination unverified; recorded GPS retained for synchronization.";
+            } catch (Exception e) {
+                // A failed transaction leaves previous records intact. Try an unverified closure.
+                try (Queue q = openQueue()) { if (id != null) q.stop(id,"endpoint_storage_failed",at); }
+                catch (RuntimeException ignored) { QueueIO.recoveryRequired(); }
+                message = routeWriteFailed ? Queue.ROUTE_REVIEW : "GPS stopped. Final capture was not saved; local queue needs review.";
+            }
+            getSharedPreferences("tracking-state",0).edit().putString("endStatus",message).apply();
+            scheduleSync();
+            main.post(() -> { if (running == this) running = null; trip = null; if (!destroyed) finishService(); });
+        });
     }
     public void onDestroy() {
-        cancelStopCapture();
-        trip = null; running = null; main.removeCallbacksAndMessages(null);
-        try { gps.removeUpdates(this); } catch (RuntimeException ignored) {}
-        try { queue.stop("service_destroyed"); } catch (RuntimeException ignored) {}
-        finally { queue.close(); network.shutdownNow(); super.onDestroy(); }
+        destroyed = true;
+        if (!terminating) end("service_destroyed");
+        if (running == this) running = null;
+        listening = false; main.removeCallbacksAndMessages(null);
+        try { removeLocations(); } catch (RuntimeException ignored) {}
+        // Do not interrupt QueueIO: an in-flight final transaction owns the stop evidence.
+        network.shutdownNow(); super.onDestroy();
     }
     public IBinder onBind(Intent intent) { return null; }
 }

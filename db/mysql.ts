@@ -1,3 +1,4 @@
+import {verifyMySQLSchema} from '@/db/mysql-schema-verify';
 import mysql,{type PoolConnection,type PoolOptions,type RowDataPacket,type ResultSetHeader} from 'mysql2/promise';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {createHash} from 'node:crypto';
@@ -7,6 +8,8 @@ import {DatabaseUnavailableError} from '@/db/errors';
 import type {Database,Result,Statement} from './types';
 
 export function openMySQL(options:PoolOptions):Database {
+  const schemaMode=process.env.DB_SCHEMA_MODE||'initialize';
+  if(!['initialize','verify'].includes(schemaMode))throw Error('DB_SCHEMA_MODE must be initialize or verify.');
   const pool=mysql.createPool(options);
   const context=new AsyncLocalStorage<{connection:PoolConnection;transaction:boolean}>();
   const lockName=(name:string)=>createHash('sha256').update(`${options.database}:fieldora:${name}`).digest('hex');
@@ -19,6 +22,7 @@ export function openMySQL(options:PoolOptions):Database {
     ready??=(async()=>{
       const c=await connection();let acquired=false;
       try{
+        if(schemaMode==='verify'){await verifyMySQLSchema(c);return;}
         const [rows]=await c.query<RowDataPacket[]>('SELECT GET_LOCK(?,30) AS acquired',[lockName('schema')]);
         if(Number(rows[0].acquired)!==1)throw Error('Database initialization is busy. Retry shortly.');
         acquired=true;

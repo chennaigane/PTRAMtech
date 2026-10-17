@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Fieldora" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fieldora_background</item>
+        <item name="android:colorAccent">@color/fieldora_primary</item>
+        <item name="android:colorControlActivated">@color/fieldora_primary</item>
+        <item name="android:colorControlHighlight">@color/fieldora_primary_light</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:textColorPrimary">@color/fieldora_text_primary</item>
+        <item name="android:textColorSecondary">@color/fieldora_text_secondary</item>
+        <item name="android:statusBarColor">@color/fieldora_primary_dark</item>
+        <item name="android:navigationBarColor">@color/fieldora_primary_dark</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <style name="Theme.Fieldora.Splash" parent="Theme.Fieldora">
+        <item name="android:windowBackground">@color/fieldora_primary_dark</item>
+        <item name="android:statusBarColor">@color/fieldora_primary_dark</item>
+        <item name="android:navigationBarColor">@color/fieldora_primary_dark</item>
+    </style>
+</resources>

@@ -22,14 +22,33 @@ final class Session {
         }
         return (SecretKey) ks.getKey("ptraam-session", null);
     }
-    static void save(Context c, String account, String token) throws Exception {
+    static void save(Context c, String account, String token, long expiresAt, String name, String role, String department) throws Exception {
+        if (expiresAt <= System.currentTimeMillis()) throw new java.io.IOException("Session is already expired");
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE, key());
         if (!c.getSharedPreferences("session", 0).edit().putString("account", account)
+            .putLong("expiresAt", expiresAt)
+            .putString("name", name == null ? "" : name.trim())
+            .putString("role", role == null ? "" : role.trim())
+            .putString("department", department == null ? "" : department.trim())
             .putString("iv", Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
             .putString("token", Base64.encodeToString(cipher.doFinal(token.getBytes(java.nio.charset.StandardCharsets.UTF_8)), Base64.NO_WRAP)).commit())
             throw new java.io.IOException("Session could not be saved");
     }
     static String account(Context c) { return c.getSharedPreferences("session", 0).getString("account", ""); }
+    static String name(Context c) { return c.getSharedPreferences("session", 0).getString("name", ""); }
+    static String role(Context c) { return c.getSharedPreferences("session", 0).getString("role", ""); }
+    static String department(Context c) { return c.getSharedPreferences("session", 0).getString("department", ""); }
+    /** Non-blocking control-thread check; token decryption and server authentication happen on workers. */
+    static boolean current(Context c) {
+        var p = c.getSharedPreferences("session", 0);
+        return !p.getString("account", "").isEmpty() && p.getLong("expiresAt", 0) > System.currentTimeMillis()
+            && p.contains("token") && p.contains("iv");
+    }
+    static boolean valid(Context c) {
+        var p = c.getSharedPreferences("session", 0);
+        if (p.getString("account", "").isEmpty() || p.getLong("expiresAt", 0) <= System.currentTimeMillis()) return false;
+        try { return !token(c).isEmpty(); } catch (Exception e) { return false; }
+    }
     static String token(Context c) throws Exception {
         var p = c.getSharedPreferences("session", 0);
         if (!p.contains("token")) throw new Api.Failure(401);

@@ -26,6 +26,6 @@ export async function ingestMySQLPoints(accountId:string,tripId:string,points:un
       seq=p.seq;time=p.time;elapsed=p.elapsedMs;
     }
     await store.prepare('UPDATE mobile_trips SET last_seq=?,last_time=?,last_elapsed=? WHERE id=?').bind(seq,time,elapsed,tripId).run();
-    await project();return {ackSeq:normalized.at(-1)!.seq};
+    if(seq!==trip.last_seq)await project();return {ackSeq:normalized.at(-1)!.seq};
   });
 }

@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:clipToPadding="false" android:background="@color/fieldora_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:gravity="center_horizontal"
+        android:paddingStart="@dimen/screen_horizontal_padding" android:paddingTop="@dimen/space_lg"
+        android:paddingEnd="@dimen/screen_horizontal_padding" android:paddingBottom="@dimen/space_xl">
+        <ImageView android:layout_width="128dp" android:layout_height="108dp"
+            android:adjustViewBounds="true" android:scaleType="centerInside"
+            android:src="@drawable/ptraam_logo" android:contentDescription="@string/company_logo_description" />
+        <TextView style="@style/Fieldora.Text.CardTitle" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/fieldora_name" android:textAllCaps="true" android:letterSpacing="0.15" />
+        <TextView style="@style/Fieldora.Text.Caption" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_xxs" android:text="@string/fieldora_tagline"
+            android:letterSpacing="0.1" android:textColor="@color/fieldora_primary" />
+
+        <LinearLayout style="@style/Fieldora.Card" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_lg" android:orientation="vertical">
+            <TextView style="@style/Fieldora.Text.Caption" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/team_access" android:letterSpacing="0.14" android:textColor="@color/fieldora_primary" />
+            <TextView style="@style/Fieldora.Text.ScreenTitle" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs" android:text="@string/welcome_back" />
+            <TextView style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_xs" android:text="@string/login_caption" />
+
+            <TextView style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_lg" android:text="@string/mobile_number" android:labelFor="@id/login_phone" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="@dimen/input_height"
+                android:layout_marginTop="@dimen/space_xs" android:orientation="horizontal" android:background="@drawable/bg_input_default">
+                <TextView style="@style/Fieldora.Text.Body.Secondary" android:layout_width="wrap_content" android:layout_height="match_parent"
+                    android:gravity="center" android:paddingStart="@dimen/space_sm" android:paddingEnd="@dimen/space_sm"
+                    android:text="@string/country_code_india" />
+                <EditText android:id="@+id/login_phone" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                    android:background="@android:color/transparent" android:paddingStart="@dimen/space_xs" android:paddingEnd="@dimen/space_sm"
+                    android:hint="@string/mobile_number_hint" android:inputType="phone" android:maxLength="10" android:imeOptions="actionNext"
+                    android:singleLine="true" android:textColor="@color/fieldora_text_primary" android:textColorHint="@color/fieldora_text_muted"
+                    android:textSize="16sp" android:importantForAutofill="yes" android:autofillHints="phone" />
+            </LinearLayout>
+            <TextView android:id="@+id/phone_error" style="@style/Fieldora.Text.Caption"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xxs"
+                android:textColor="@color/fieldora_error" android:visibility="gone" />
+
+            <TextView style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_md" android:text="@string/password" android:labelFor="@id/login_password" />
+            <EditText android:id="@+id/login_password" style="@style/Fieldora.Input"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs"
+                android:hint="@string/password_hint" android:inputType="textPassword" android:maxLength="128"
+                android:singleLine="true" android:imeOptions="actionDone" android:importantForAutofill="yes" android:autofillHints="password" />
+            <TextView android:id="@+id/password_error" style="@style/Fieldora.Text.Caption"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xxs"
+                android:textColor="@color/fieldora_error" android:visibility="gone" />
+            <CheckBox android:id="@+id/password_toggle" android:layout_width="wrap_content" android:layout_height="@dimen/touch_target_min"
+                android:layout_gravity="end" android:text="@string/show_password" android:textColor="@color/fieldora_primary"
+                android:buttonTint="@color/fieldora_primary" />
+
+            <TextView android:id="@+id/login_message" style="@style/Fieldora.Message.Error"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_sm"
+                android:accessibilityLiveRegion="polite" android:visibility="gone" />
+            <ProgressBar android:id="@+id/login_progress" android:layout_width="24dp" android:layout_height="24dp"
+                android:layout_gravity="center_horizontal" android:layout_marginTop="@dimen/space_md"
+                android:indeterminateTint="@color/fieldora_primary" android:visibility="gone" />
+            <Button android:id="@+id/login_button" style="@style/Fieldora.Button.Primary"
+                android:layout_width="match_parent" android:layout_height="@dimen/button_height"
+                android:layout_marginTop="@dimen/space_md" android:text="@string/login" />
+
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm" android:orientation="horizontal" android:gravity="center">
+                <Button android:id="@+id/forgot_password" style="@style/Fieldora.Button.Secondary"
+                    android:layout_width="0dp" android:layout_height="@dimen/button_height" android:layout_weight="1"
+                    android:layout_marginEnd="@dimen/space_xs" android:text="@string/forgot_password" />
+                <Button android:id="@+id/signup_button" style="@style/Fieldora.Button.Secondary"
+                    android:layout_width="0dp" android:layout_height="@dimen/button_height" android:layout_weight="1"
+                    android:layout_marginStart="@dimen/space_xs" android:text="@string/signup" />
+            </LinearLayout>
+
+            <Button android:id="@+id/server_settings" style="@style/Fieldora.Button.Secondary"
+                android:layout_width="match_parent" android:layout_height="@dimen/button_height"
+                android:layout_marginTop="@dimen/space_sm" android:text="@string/server_settings" />
+            <LinearLayout android:id="@+id/server_group" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_sm" android:orientation="vertical" android:visibility="gone">
+                <TextView style="@style/Fieldora.Text.Body.Secondary" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/server_origin" android:labelFor="@id/server_origin" />
+                <EditText android:id="@+id/server_origin" style="@style/Fieldora.Input"
+                    android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="@dimen/space_xs"
+                    android:hint="@string/server_origin_hint" android:inputType="textUri" android:singleLine="true" />
+                <Button android:id="@+id/save_server" style="@style/Fieldora.Button.Secondary"
+                    android:layout_width="match_parent" android:layout_height="@dimen/button_height"
+                    android:layout_marginTop="@dimen/space_sm" android:text="@string/save_server" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
