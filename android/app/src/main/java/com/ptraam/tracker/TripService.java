@@ -146,7 +146,7 @@ public class TripService extends Service implements LocationListener {
             Notification n = notification(open, stopAction, "Location tracking is active for your field trip.");
             foreground(n);
             running = this;
-            getSharedPreferences("tracking-state", 0).edit().putLong("lastFix", 0).putString("reason", "").putString("endStatus", "").putString("gpsStatus", "GPS Active").apply();
+            getSharedPreferences("tracking-state", 0).edit().putLong("lastFix", 0).putString("reason", "").putString("endStatus", "").putString("gpsStatus", "Acquiring precise GPS location…").apply();
             String requestedTrip = trip;
             main.post(guard);
             executeStorage(() -> {
@@ -256,7 +256,7 @@ public class TripService extends Service implements LocationListener {
         if (!gpsEnabled()) { locationUnavailable("Location is unavailable. Turn on device location to continue accurate trip tracking."); return; }
         if (!listening) try {
             requestLocations(ending.waiting() ? 1000 : 10000); listening = true;
-            getSharedPreferences("tracking-state", 0).edit().putString("gpsStatus", "GPS Active").apply();
+            getSharedPreferences("tracking-state", 0).edit().putString("gpsStatus", "Waiting for a precise GPS fix…").apply();
         } catch (SecurityException e) { end("permission_revoked"); }
     }
     private void end(String reason) { end(reason, null, System.currentTimeMillis()); }
