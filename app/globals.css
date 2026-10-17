@@ -96,3 +96,44 @@
 /* Journey detail: captured GPS start and end points */
 .trip-points{display:grid;gap:4px;margin:12px 0 0;font-size:14px;overflow-wrap:anywhere}
 .trip-points p{margin:0}
+
+
+/* Fieldora v3: touch-first journey cards without changing the desktop report. */
+.travel-mobile-list{display:none}
+.native-gps-status{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:16px;border:1px solid #d9e4f0;background:#f5f9ff;border-radius:12px;color:#173b67;min-width:0}
+.native-gps-status>div{flex:1;min-width:0}
+.native-gps-status b{font-size:13px}
+.native-gps-status p{font-size:12px;line-height:1.45;overflow-wrap:anywhere;margin-top:3px}
+.native-gps-dot{width:11px;height:11px;border-radius:50%;background:#d39b36;flex-shrink:0}
+.native-gps-dot.ready{background:#248b53}
+@media(max-width:600px){
+ .topbar{height:auto;min-height:60px;gap:8px;padding:10px 14px;align-items:center}
+ .topbar .crumb{min-width:0;flex:1;font-size:12px}
+ .topbar .crumb b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px}
+ .top-actions{display:flex;align-items:center;gap:8px;min-width:0}
+ .top-actions .signed-in,.top-actions .pilot-tag{display:none}
+ .top-actions .text-button{font-size:12px;white-space:nowrap}
+ .top-actions .sos-button{font-size:0;padding:10px;min-width:40px;min-height:40px}
+ .top-actions .sos-button svg{width:19px;height:19px}
+ .travel-desktop-table{display:none}
+ .travel-mobile-list{display:grid;gap:12px;margin:12px 0 20px}
+ .travel-mobile-card{display:block;width:100%;text-align:left;border:1px solid #dce5ef;border-radius:16px;background:#fff;padding:16px;box-shadow:0 2px 10px #183b6010;color:#17304f;min-height:116px}
+ .travel-mobile-card.selected{border-color:#274f89;box-shadow:0 0 0 2px #274f8922}
+ .travel-mobile-card-head,.travel-mobile-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
+ .travel-mobile-card-head strong{font-size:14px;overflow-wrap:anywhere}
+ .travel-mobile-status{font-size:11px;color:#355b85;background:#edf3fa;border-radius:20px;padding:4px 9px;flex-shrink:0}
+ .travel-mobile-route{display:grid;grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr);align-items:center;gap:8px;margin:15px 0;font-size:14px;font-weight:600}
+ .travel-mobile-route span{min-width:0;overflow-wrap:anywhere}
+ .travel-mobile-route svg{color:#7c8fa7}
+ .travel-mobile-card-foot{border-top:1px solid #edf0f4;padding-top:12px;font-size:12px;color:#687b91;justify-content:flex-start}
+ .travel-mobile-card-foot>span{margin-left:auto;color:#274f89;display:flex;align-items:center}
+ .travel-mobile-empty{padding:20px;text-align:center;color:#687b91}
+ .toolbar{display:flex;align-items:stretch;gap:10px}
+ .toolbar input{min-width:0;flex:1}
+ .toolbar .button{min-height:44px;white-space:nowrap}
+ .trip-detail .panel-head{gap:12px}
+ .trip-detail .panel-head .actions{width:100%;justify-content:flex-start}
+ .trip-detail .panel-head .actions .button{min-height:44px}
+ .native-gps-status{padding:12px;margin-bottom:14px}
+ main{padding-bottom:calc(28px + env(safe-area-inset-bottom,0px))}
+}
