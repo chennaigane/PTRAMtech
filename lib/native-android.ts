@@ -18,6 +18,19 @@ export function connectNative(onState:(s:State)=>void,onError:(s:string)=>void){
  window.addEventListener('message',receive);
  return()=>{window.removeEventListener('message',receive);port?.close();port=null;for(const p of waiting.values()){clearTimeout(p.timer);p.reject(Error('Page closed.'));}waiting.clear();};
 }
+// The native WebView bridge may become ready after React mounts. Wait briefly instead
+// of asking an employee to reconnect manually while the handshake is in progress.
+export function waitForNativeBridge(timeoutMs=12000):Promise<void>{
+ if(port)return Promise.resolve();
+ return new Promise((resolve,reject)=>{
+  let timer:ReturnType<typeof setTimeout>;
+  const ready=()=>{cleanup();resolve();};
+  const cleanup=()=>{window.removeEventListener('fieldora-native-ready',ready);clearTimeout(timer);};
+  window.addEventListener('fieldora-native-ready',ready);
+  timer=setTimeout(()=>{cleanup();reject(Error('Native GPS connection is unavailable. Close and reopen Fieldora, then retry.'));},timeoutMs);
+  if(port){cleanup();resolve();}
+ });
+}
 export async function authorizeNative(accountId:string){
  const challenge=await nativeCommand('challenge');
  let response:Response;
